@@ -6,14 +6,14 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1067</width>
+    <width>1204</width>
     <height>782</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout" rowstretch="2,1,2">
+  <layout class="QGridLayout" name="gridLayout" rowstretch="2,1,2,0">
    <item row="1" column="0">
     <widget class="QGroupBox" name="options_gb">
      <property name="title">
@@ -210,6 +210,13 @@
        </widget>
       </item>
      </layout>
+    </widget>
+   </item>
+   <item row="3" column="0">
+    <widget class="QTextEdit" name="uv_output">
+     <property name="readOnly">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
   </layout>

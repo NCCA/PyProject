@@ -4,10 +4,11 @@
 
 import json
 import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
-import stat
+
 from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QMainWindow, QPlainTextEdit, QWidget
@@ -122,7 +123,9 @@ class MainWindow(QMainWindow):
             return
 
         commands = self._generate_uv_commands()
-        print(commands)
+        # append the commands to the output text edit
+        for cmd in commands:
+            self.uv_output.append(cmd)
 
     def _create_simple_script(self) -> None:
         # grab a python file name using the dialog

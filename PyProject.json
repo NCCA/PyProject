@@ -1,9 +1,6 @@
 {
   "nccapy project": {
-    "packages": [
-      ["nccapy", "enabled"],
-      ["test", "disabled"]
-    ],
+    "packages": [["nccapy", "enabled"]],
     "description": [
       "This is a sample nccapy project configuration file",
       "It will install nccapy, PILLOW (pil) and numpy packages",
