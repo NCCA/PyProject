@@ -11,9 +11,16 @@ from pathlib import Path
 
 from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QMainWindow, QPlainTextEdit, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QFileDialog,
+    QMainWindow,
+    QPlainTextEdit,
+    QProgressDialog,
+    QWidget,
+)
 
-from PySide6.QtWidgets import QProgressDialog
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -53,7 +60,8 @@ class MainWindow(QMainWindow):
 
         # print([version["version"] for version in versions])
         for idx, version in enumerate(versions):
-            text = f"{version['version']} , {version['implementation']}"
+            installed = " (installed)" if version["path"] else ""
+            text = f"{version['version']} , {version['implementation']} {installed}"
             self.which_python.addItem(text)
             # default to python 3.13.3 if it exists
             if "3.13.2" in text:
@@ -111,13 +119,13 @@ class MainWindow(QMainWindow):
         progress.show()
 
         # Execute the commands
-        for idx,cmd in enumerate(commands):
+        for idx, cmd in enumerate(commands):
             self.uv_output.append(f"Executing: {cmd}")
             progress.setValue(idx)
             QApplication.processEvents()
             if progress.wasCanceled():
-                    self.uv_output.append("Operation canceled by user.\n")
-                    break
+                self.uv_output.append("Operation canceled by user.\n")
+                break
             try:
                 result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
                 self.uv_output.append(result.stdout)
@@ -131,6 +139,8 @@ class MainWindow(QMainWindow):
                     self.uv_output.append(e.stderr)
             self.uv_output.update()
         self.uv_output.append("DONE\n\n")
+        if self.make_runnable.isChecked() and self.app_type.currentIndex() == 0:
+            self._make_runnable(self.project_location.text() + "/" + self.project_name.text() + "/main.py")
         progress.setValue(len(commands))
 
     def _save_script(self) -> None: ...
@@ -157,23 +167,29 @@ class MainWindow(QMainWindow):
             print(cmd)
             try:
                 subprocess.run(cmd, shell=True, check=True)
+                if self.make_runnable.isChecked():
+                    self._make_runnable(file_name)
+
             except subprocess.CalledProcessError as e:
                 print(f"Error executing command: {e}")
-            exe_file = Path(file_name)
-            print(exe_file)
-            exe_file.chmod(exe_file.stat().st_mode | stat.S_IEXEC)
-            content = exe_file.read_text()
-            exe_file.write_text(f"#!/usr/bin/env -S uv run --script\n{content}")
+
+    def _make_runnable(self, file_name):
+        exe_file = Path(file_name)
+        exe_file.chmod(exe_file.stat().st_mode | stat.S_IEXEC)
+        content = exe_file.read_text()
+        exe_file.write_text(f"#!/usr/bin/env -S uv run --script\n{content}")
 
     def _generate_uv_commands(self) -> list[str]:
         commands = []
+        generator = ["--app", "--package", "--lib"]
+        gen_type = generator[self.app_type.currentIndex()]
         # first to create the project folder
         project_path = Path(self.project_location.text()) / self.project_name.text()
         python_version = self.which_python.currentText().split(",")[0].strip()
         vcs_option = "--vcs git" if self.use_git.isChecked() else "--vcs none"
         no_readme = "--no-readme" if self.no_readme.isChecked() else ""
         no_workspace = "--no-workspace" if self.no_workspace.isChecked() else ""
-        cmd = f"{self.uv_executable} init --python {python_version} --name {self.project_name.text()} {vcs_option} {no_readme} {no_workspace} {project_path}"
+        cmd = f"{self.uv_executable} init {gen_type} --python {python_version} --name {self.project_name.text()} {vcs_option} {no_readme} {no_workspace} {project_path}"
         commands.append(cmd)
         # Now we will add the packages
         # we will iterate over the checkboxes in the options group box and add the ones that are checked
@@ -190,6 +206,17 @@ class MainWindow(QMainWindow):
                 else:
                     cmd = f"{self.uv_executable} add {package_name} --project {project_path}"
                 commands.append(cmd)
+
+        # Now we will add the extras
+        extras_layout = self.extras_gb.layout()
+        for i in range(extras_layout.count()):
+            checkbox = extras_layout.itemAt(i).widget()
+            if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+                src = checkbox.property("src")
+                dst = checkbox.property("dst")
+                if src and dst:
+                    cmd = f"cp templates/{src} {project_path}/{dst}"
+                    commands.append(cmd)
 
         return commands
 

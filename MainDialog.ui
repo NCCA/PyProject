@@ -125,10 +125,18 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QComboBox" name="template_choice"/>
+       <widget class="QComboBox" name="template_choice">
+        <property name="toolTip">
+         <string>Which of the build in project templase to use. See the project description for more details</string>
+        </property>
+       </widget>
       </item>
       <item row="1" column="1">
-       <widget class="QComboBox" name="which_python"/>
+       <widget class="QComboBox" name="which_python">
+        <property name="toolTip">
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Which python to use for the project. There are many verson uv can access. it will download if not already installed. &lt;/p&gt;&lt;p&gt;Installed versions are indicated. &lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+        </property>
+       </widget>
       </item>
       <item row="2" column="1">
        <widget class="QPlainTextEdit" name="description_text">
@@ -139,6 +147,9 @@
       </item>
       <item row="3" column="0">
        <widget class="QPushButton" name="select_location">
+        <property name="toolTip">
+         <string>Select base location for the project</string>
+        </property>
         <property name="text">
          <string>Location</string>
         </property>
@@ -161,7 +172,23 @@
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <item>
+          <widget class="QCheckBox" name="make_runnable">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;if a main.py is generated for the project this will add the following shebang&lt;/p&gt;&lt;p&gt;#!/usr/bin/env -S uv run --script &lt;/p&gt;&lt;p&gt;and also chmod +x the file.  This only works for the App or Script modes.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
+           <property name="text">
+            <string>make executable</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QCheckBox" name="no_readme">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Do no generate a README.md file in the project&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
             <string>no readme</string>
            </property>
@@ -171,6 +198,9 @@
           <widget class="QCheckBox" name="use_git">
            <property name="enabled">
             <bool>true</bool>
+           </property>
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;create a basic git setup for the project. Including a .gitignore&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
            </property>
            <property name="text">
             <string>use git</string>
@@ -182,6 +212,9 @@
          </item>
          <item>
           <widget class="QCheckBox" name="no_workspace">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;If a parent workspace is found do not add this project to it. By default this will add to any parent workspace if found.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <property name="text">
             <string>no-workspace</string>
            </property>
@@ -189,6 +222,9 @@
          </item>
          <item>
           <widget class="QComboBox" name="app_type">
+           <property name="toolTip">
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;App will create a project for an app (main.py)&lt;/p&gt;&lt;p&gt;Package will set up the project to be built as a Python package&lt;/p&gt;&lt;p&gt;Lib will create a project for a library&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+           </property>
            <item>
             <property name="text">
              <string>App</string>

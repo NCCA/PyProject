@@ -8,4 +8,4 @@ PATH_add "$VIRTUAL_ENV/bin"
 export VIRTUAL_ENV_PROMPT="($(basename $PWD)) "
 
 # Tell Zsh to source this file
-export DIRENV_ZSH_HOOK="$PWD/zsh_functions.sh"
+export DIRENV_ZSH_HOOK="$PWD/jupyter_functions.sh"

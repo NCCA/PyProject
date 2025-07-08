@@ -9,7 +9,7 @@
     "extras": {
       "templates": [
         "activate_direnv",
-        ".direnv",
+        ".envrc",
         "auto activate the virtual env on cd"
       ]
     }
@@ -32,7 +32,7 @@
     "extras": {
       "templates": [
         "ml_direnv",
-        ".direnv",
+        ".envrc",
         "auto activate the virtual env on cd",
         "jupyter_functions",
         "jupyter_functions.sh",
