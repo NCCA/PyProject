@@ -13,6 +13,7 @@ from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QMainWindow, QPlainTextEdit, QWidget
 
+from PySide6.QtWidgets import QProgressDialog
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -103,14 +104,34 @@ class MainWindow(QMainWindow):
             print("No commands generated. Please check your configuration.")
             return
 
-        # Execute the commands
-        for cmd in commands:
-            print(f"Executing: {cmd}")
+        # Show a progress dialog while executing the commands
+        progress = QProgressDialog("Running commands...", "Cancel", 0, len(commands), self)
+        progress.setWindowTitle("Progress")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.show()
 
+        # Execute the commands
+        for idx,cmd in enumerate(commands):
+            self.uv_output.append(f"Executing: {cmd}")
+            progress.setValue(idx)
+            QApplication.processEvents()
+            if progress.wasCanceled():
+                    self.uv_output.append("Operation canceled by user.\n")
+                    break
             try:
-                subprocess.run(cmd, shell=True, check=True)
+                result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+                self.uv_output.append(result.stdout)
+                if result.stderr:
+                    self.uv_output.append(result.stderr)
             except subprocess.CalledProcessError as e:
-                print(f"Error executing command: {e}")
+                self.uv_output.append(f"Error executing command: {e}\n")
+                if e.stdout:
+                    self.uv_output.append(e.stdout)
+                if e.stderr:
+                    self.uv_output.append(e.stderr)
+            self.uv_output.update()
+        self.uv_output.append("DONE\n\n")
+        progress.setValue(len(commands))
 
     def _save_script(self) -> None: ...
 
@@ -149,7 +170,10 @@ class MainWindow(QMainWindow):
         # first to create the project folder
         project_path = Path(self.project_location.text()) / self.project_name.text()
         python_version = self.which_python.currentText().split(",")[0].strip()
-        cmd = f"{self.uv_executable} init --python {python_version} --name {self.project_name.text()} {project_path}"
+        vcs_option = "--vcs git" if self.use_git.isChecked() else "--vcs none"
+        no_readme = "--no-readme" if self.no_readme.isChecked() else ""
+        no_workspace = "--no-workspace" if self.no_workspace.isChecked() else ""
+        cmd = f"{self.uv_executable} init --python {python_version} --name {self.project_name.text()} {vcs_option} {no_readme} {no_workspace} {project_path}"
         commands.append(cmd)
         # Now we will add the packages
         # we will iterate over the checkboxes in the options group box and add the ones that are checked

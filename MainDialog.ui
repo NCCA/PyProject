@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout" rowstretch="2,1,2,0">
+  <layout class="QGridLayout" name="gridLayout" rowstretch="2,1,3,4">
    <item row="1" column="0">
     <widget class="QGroupBox" name="options_gb">
      <property name="title">
