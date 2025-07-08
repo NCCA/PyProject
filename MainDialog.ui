@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>Dialog</string>
   </property>
-  <layout class="QGridLayout" name="gridLayout" rowstretch="3,1,1">
+  <layout class="QGridLayout" name="gridLayout" rowstretch="2,1,2">
    <item row="1" column="0">
     <widget class="QGroupBox" name="options_gb">
      <property name="title">
@@ -161,14 +161,14 @@
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <item>
-          <widget class="QCheckBox" name="checkBox_3">
+          <widget class="QCheckBox" name="no_readme">
            <property name="text">
             <string>no readme</string>
            </property>
           </widget>
          </item>
          <item>
-          <widget class="QCheckBox" name="checkBox_2">
+          <widget class="QCheckBox" name="use_git">
            <property name="enabled">
             <bool>true</bool>
            </property>
@@ -181,10 +181,29 @@
           </widget>
          </item>
          <item>
-          <widget class="QCheckBox" name="checkBox">
+          <widget class="QCheckBox" name="no_workspace">
            <property name="text">
             <string>no-workspace</string>
            </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QComboBox" name="app_type">
+           <item>
+            <property name="text">
+             <string>App</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Package</string>
+            </property>
+           </item>
+           <item>
+            <property name="text">
+             <string>Lib</string>
+            </property>
+           </item>
           </widget>
          </item>
         </layout>

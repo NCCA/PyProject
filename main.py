@@ -7,10 +7,10 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-
+import stat
 from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QMainWindow, QWidget
+from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QMainWindow, QPlainTextEdit, QWidget
 
 
 class MainWindow(QMainWindow):
@@ -79,11 +79,13 @@ class MainWindow(QMainWindow):
         self.dry_run.setEnabled(False)
         self.create_project.setEnabled(False)
         self.save_script.setEnabled(False)
+        self.save_script.setEnabled(False)
 
     def _connect_buttons(self) -> None:
         self.select_location.clicked.connect(self._select_location)
         self.dry_run.clicked.connect(self._dry_run)
         self.save_script.clicked.connect(self._save_script)
+        self.simple_script.clicked.connect(self._create_simple_script)
         self.create_project.clicked.connect(self._create_project)
         self.template_choice.currentIndexChanged.connect(lambda index: self._setup_current_template(index))
 
@@ -122,34 +124,45 @@ class MainWindow(QMainWindow):
         commands = self._generate_uv_commands()
         print(commands)
 
+    def _create_simple_script(self) -> None:
+        # grab a python file name using the dialog
+        file_name = QFileDialog.getSaveFileName(self, "Save Python Script", "", "Python Files (*.py)")[0]
+        if file_name:
+            python_version = self.which_python.currentText().split(",")[0].strip()
+            cmd = f"{self.uv_executable} init --script --python {python_version}  {file_name}"
+            print(cmd)
+            try:
+                subprocess.run(cmd, shell=True, check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error executing command: {e}")
+            exe_file = Path(file_name)
+            print(exe_file)
+            exe_file.chmod(exe_file.stat().st_mode | stat.S_IEXEC)
+            content = exe_file.read_text()
+            exe_file.write_text(f"#!/usr/bin/env -S uv run --script\n{content}")
+
     def _generate_uv_commands(self) -> list[str]:
         commands = []
         # first to create the project folder
-        try:
-            project_path = Path(self.project_location.text()) / self.project_name.text()
-            python_version = self.which_python.currentText().split(",")[0].strip()
-            cmd = (
-                f"{self.uv_executable} init --python {python_version} --name {self.project_name.text()} {project_path}"
-            )
-            commands.append(cmd)
-            # Now we will add the packages
-            # we will iterate over the checkboxes in the options group box and add the ones that are checked
-            options_layout = self.options_gb.layout()
-            for i in range(options_layout.count()):
-                checkbox = options_layout.itemAt(i).widget()
-                if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
-                    package_name = checkbox.objectName()
-                    # Check if the checkbox has a version property
-                    # if it does, we will add it to the command
-                    version = checkbox.property("version")
-                    if version:
-                        cmd = f"{self.uv_executable} add '{package_name}{version}' --project {project_path}"
-                    else:
-                        cmd = f"{self.uv_executable} add {package_name} --project {project_path}"
-                    commands.append(cmd)
-        except FileNotFoundError:
-            print(f"Error creating project directory: {self.project_location.text()}")
-            return ""
+        project_path = Path(self.project_location.text()) / self.project_name.text()
+        python_version = self.which_python.currentText().split(",")[0].strip()
+        cmd = f"{self.uv_executable} init --python {python_version} --name {self.project_name.text()} {project_path}"
+        commands.append(cmd)
+        # Now we will add the packages
+        # we will iterate over the checkboxes in the options group box and add the ones that are checked
+        options_layout = self.options_gb.layout()
+        for i in range(options_layout.count()):
+            checkbox = options_layout.itemAt(i).widget()
+            if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+                package_name = checkbox.objectName()
+                # Check if the checkbox has a version property
+                # if it does, we will add it to the command
+                version = checkbox.property("version")
+                if version:
+                    cmd = f"{self.uv_executable} add '{package_name}{version}' --project {project_path}"
+                else:
+                    cmd = f"{self.uv_executable} add {package_name} --project {project_path}"
+                commands.append(cmd)
 
         return commands
 
@@ -166,6 +179,7 @@ class MainWindow(QMainWindow):
             self.dry_run.setEnabled(True)
             self.create_project.setEnabled(True)
             self.save_script.setEnabled(True)
+            self.simple_script.setEnabled(True)
 
     def _setup_current_template(self, index: str) -> None:
         # we will now select the first item in the combo box and populate
@@ -230,6 +244,18 @@ class MainWindow(QMainWindow):
             row = i // columns
             col = i % columns
             extras_layout.addWidget(checkbox, row, col)
+
+        toml_data = extras.get("pyproject_extras", [])
+        print(data)
+        print(toml_data)
+        print(extras)
+        if toml_data:
+            # create a plain text edit for the pyproject.toml extras
+            toml_text_edit = QPlainTextEdit()
+            for text in toml_data:
+                toml_text_edit.appendPlainText(text)
+                print(text)
+            extras_layout.addWidget(toml_text_edit, len(templates) // columns + 1, 0, 1, columns)
 
     def load_ui(self) -> None:
         """Load the UI from a .ui file and set up the connections."""
