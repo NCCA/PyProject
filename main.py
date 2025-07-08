@@ -1,0 +1,259 @@
+#!/usr/bin/env -S uv run --script
+
+#!/usr/bin/env -S uv run --script
+
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from PySide6.QtCore import QFile, Qt
+from PySide6.QtUiTools import QUiLoader
+from PySide6.QtWidgets import QApplication, QCheckBox, QFileDialog, QMainWindow, QWidget
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("PyProject")
+        self.resize(1024, 720)
+        self.load_ui()
+        self.load_json_config("PyProject.json")
+        self._find_tools()
+        self._get_python_versions()
+        self._connect_buttons()
+        self.project_active = False
+
+    def _find_tools(self) -> None:
+        self.uv_executable = shutil.which("uv")
+        self.uvx_executable = shutil.which("uvx")
+        print(f"{self.uv_executable=}")
+        print(f"{self.uvx_executable=}")
+
+    def _get_python_versions(self):
+        """
+        uv python list --output-format json will give us the data we need but we only the numbers
+        """
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                [self.uv_executable, "python", "list", "--output-format", "json"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            versions = json.loads(result.stdout)
+        except subprocess.CalledProcessError as e:
+            print(f"Error fetching Python versions: {e}")
+            return []
+
+        # print([version["version"] for version in versions])
+        for idx, version in enumerate(versions):
+            text = f"{version['version']} , {version['implementation']}"
+            self.which_python.addItem(text)
+            # default to python 3.13.3 if it exists
+            if "3.13.2" in text:
+                self.which_python.setCurrentIndex(idx)
+
+    def load_json_config(self, json_path: str) -> None:
+        """
+        Load applications from a JSON file and setup ui
+
+        Args:
+            json_path: Path to the JSON file.
+        """
+        with open(json_path, "r", encoding="utf-8") as f:
+            self.template_data = json.load(f)
+        print(self.template_data)
+
+        # now populate the combo box with the keys from the JSON data
+        for key in self.template_data.keys():
+            # Assuming you have a combo box named `comboBox`
+            if hasattr(self, "template_choice"):
+                self.template_choice.addItem(key)
+            self._setup_current_template(0)
+
+        # Default disable buttons until we have a project location
+        self.dry_run.setEnabled(False)
+        self.create_project.setEnabled(False)
+        self.save_script.setEnabled(False)
+
+    def _connect_buttons(self) -> None:
+        self.select_location.clicked.connect(self._select_location)
+        self.dry_run.clicked.connect(self._dry_run)
+        self.save_script.clicked.connect(self._save_script)
+        self.create_project.clicked.connect(self._create_project)
+        self.template_choice.currentIndexChanged.connect(lambda index: self._setup_current_template(index))
+
+    def _create_project(self) -> None:
+        """
+        This will create the project in the selected location.
+        """
+        if not self.project_active:
+            print("No project location selected.")
+            return
+
+        commands = self._generate_uv_commands()
+        if not commands:
+            print("No commands generated. Please check your configuration.")
+            return
+
+        # Execute the commands
+        for cmd in commands:
+            print(f"Executing: {cmd}")
+
+            try:
+                subprocess.run(cmd, shell=True, check=True)
+            except subprocess.CalledProcessError as e:
+                print(f"Error executing command: {e}")
+
+    def _save_script(self) -> None: ...
+
+    def _dry_run(self) -> None:
+        """
+        This will generate the commands to create the project but not execute them.
+        """
+        if not self.project_active:
+            print("No project location selected.")
+            return
+
+        commands = self._generate_uv_commands()
+        print(commands)
+
+    def _generate_uv_commands(self) -> list[str]:
+        commands = []
+        # first to create the project folder
+        try:
+            project_path = Path(self.project_location.text()) / self.project_name.text()
+            python_version = self.which_python.currentText().split(",")[0].strip()
+            cmd = (
+                f"{self.uv_executable} init --python {python_version} --name {self.project_name.text()} {project_path}"
+            )
+            commands.append(cmd)
+            # Now we will add the packages
+            # we will iterate over the checkboxes in the options group box and add the ones that are checked
+            options_layout = self.options_gb.layout()
+            for i in range(options_layout.count()):
+                checkbox = options_layout.itemAt(i).widget()
+                if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
+                    package_name = checkbox.objectName()
+                    # Check if the checkbox has a version property
+                    # if it does, we will add it to the command
+                    version = checkbox.property("version")
+                    if version:
+                        cmd = f"{self.uv_executable} add '{package_name}{version}' --project {project_path}"
+                    else:
+                        cmd = f"{self.uv_executable} add {package_name} --project {project_path}"
+                    commands.append(cmd)
+        except FileNotFoundError:
+            print(f"Error creating project directory: {self.project_location.text()}")
+            return ""
+
+        return commands
+
+    def _select_location(self) -> None:
+        """
+        Open a file dialog to select the project location.
+        """
+        options = QFileDialog.Options()
+        directory = QFileDialog.getExistingDirectory(self, "Select Project Location", "", options=options)
+        if directory:
+            self.project_location.setText(directory)
+            self.project_active = True
+            # enable the buttons
+            self.dry_run.setEnabled(True)
+            self.create_project.setEnabled(True)
+            self.save_script.setEnabled(True)
+
+    def _setup_current_template(self, index: str) -> None:
+        # we will now select the first item in the combo box and populate
+        # the rest of the UI with the data from the JSON
+        if hasattr(self, "template_choice") and self.template_choice.count() > 0:
+            self.template_choice.setCurrentIndex(index)
+            data = self.template_data[self.template_choice.currentText()]
+        # we have desciption as an array of strings that needs to be \n seperated so add this to the QPlainTextEdit
+        self.description_text.clear()
+        self.description_text.setPlainText("\n".join(data.get("description", [])))
+        # now add all the options to the options group_box
+        self._generate_options(data)
+        # now add the extras to the extras group box
+        self._generate_extras(data)
+
+    def _generate_options(self, data) -> None:
+        options_layout = self.options_gb.layout()
+        packages = data.get("packages", {})
+        columns = 5
+        # first remove all existing widgets in the layout
+        for i in reversed(range(options_layout.count())):
+            options_layout.itemAt(i).widget().deleteLater()
+
+        for idx, package in enumerate(packages):
+            # create a checkbox for each package
+            checkbox = QCheckBox()
+            checkbox.setObjectName(package[0])
+            checkbox.setText(package[0])
+            # set the checkbox to be checked if the package is selected
+            # we have "enabled" or "disabled" in the package tuple
+            checkbox.setChecked(package[1] == "enabled")
+            # Check for a third element in the tuple for version and add as attribute if it exists
+            if len(package) > 2:
+                checkbox.setProperty("version", package[2])
+
+            row = idx // columns
+            col = idx % columns
+            options_layout.addWidget(checkbox, row, col)
+
+    def _generate_extras(self, data) -> None:
+        extras_layout = self.extras_gb.layout()
+        extras = data.get("extras", {})
+        columns = 5
+        # first remove all existing widgets in the layout
+        for i in reversed(range(extras_layout.count())):
+            extras_layout.itemAt(i).widget().deleteLater()
+
+        # find any templates to copy
+        templates = extras.get("templates", [])
+        print(templates)
+        print(len(templates))
+        for i in range(0, len(templates), 3):
+            # create a checkbox for each template
+            checkbox = QCheckBox()
+            checkbox.setText(templates[i + 2])
+            print(templates[i + 2])
+            checkbox.setProperty("src", templates[i])
+            checkbox.setProperty("dst", templates[i + 1])
+            checkbox.setObjectName(f"template_{i + 1}")
+            # set the checkbox to be checked if the template is selected
+            checkbox.setChecked(True)
+            row = i // columns
+            col = i % columns
+            extras_layout.addWidget(checkbox, row, col)
+
+    def load_ui(self) -> None:
+        """Load the UI from a .ui file and set up the connections."""
+        loader = QUiLoader()
+        ui_file = QFile("MainDialog.ui")
+        ui_file.open(QFile.ReadOnly)
+        # Load the UI into `self` as the parent
+        loaded_ui = loader.load(ui_file, self)
+        self.setCentralWidget(loaded_ui)
+        # add all children with object names to `self`
+        for child in loaded_ui.findChildren(QWidget):
+            name = child.objectName()
+            if name:
+                setattr(self, name, child)
+        ui_file.close()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.close()
+            ...
+
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
