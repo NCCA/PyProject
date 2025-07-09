@@ -8,6 +8,7 @@ import stat
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, Dict
 
 from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
@@ -23,7 +24,8 @@ from PySide6.QtWidgets import (
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialize the MainWindow with UI setup and configuration loading."""
         super().__init__()
         self.setWindowTitle("PyProject")
         self.resize(1024, 720)
@@ -35,14 +37,18 @@ class MainWindow(QMainWindow):
         self.project_active = False
 
     def _find_tools(self) -> None:
+        """Find and store paths to uv and uvx executables."""
         self.uv_executable = shutil.which("uv")
         self.uvx_executable = shutil.which("uvx")
         print(f"{self.uv_executable=}")
         print(f"{self.uvx_executable=}")
 
-    def _get_python_versions(self):
+    def _get_python_versions(self) -> None:
         """
-        uv python list --output-format json will give us the data we need but we only the numbers
+        Fetch available Python versions using uv and populate the version combo box.
+
+        Uses 'uv python list --output-format json' to get available Python versions
+        and populates the which_python combo box with them.
         """
         import subprocess
 
@@ -56,12 +62,11 @@ class MainWindow(QMainWindow):
             versions = json.loads(result.stdout)
         except subprocess.CalledProcessError as e:
             print(f"Error fetching Python versions: {e}")
-            return []
+            return
 
         # print([version["version"] for version in versions])
         for idx, version in enumerate(versions):
-            installed = " (installed)" if version["path"] else ""
-            text = f"{version['version']} , {version['implementation']} {installed}"
+            text = f"{version['version']} , {version['implementation']}"
             self.which_python.addItem(text)
             # default to python 3.13.3 if it exists
             if "3.13.2" in text:
@@ -69,10 +74,10 @@ class MainWindow(QMainWindow):
 
     def load_json_config(self, json_path: str) -> None:
         """
-        Load applications from a JSON file and setup ui
+        Load project template configurations from a JSON file and setup UI.
 
         Args:
-            json_path: Path to the JSON file.
+            json_path: Path to the JSON configuration file.
         """
         with open(json_path, "r", encoding="utf-8") as f:
             self.template_data = json.load(f)
@@ -92,6 +97,7 @@ class MainWindow(QMainWindow):
         self.save_script.setEnabled(False)
 
     def _connect_buttons(self) -> None:
+        """Connect UI buttons to their respective handler methods."""
         self.select_location.clicked.connect(self._select_location)
         self.dry_run.clicked.connect(self._dry_run)
         self.save_script.clicked.connect(self._save_script)
@@ -143,11 +149,15 @@ class MainWindow(QMainWindow):
             self._make_runnable(self.project_location.text() + "/" + self.project_name.text() + "/main.py")
         progress.setValue(len(commands))
 
-    def _save_script(self) -> None: ...
+    def _save_script(self) -> None:
+        """Save the generated script to a file (placeholder implementation)."""
+        ...
 
     def _dry_run(self) -> None:
         """
-        This will generate the commands to create the project but not execute them.
+        Generate the commands to create the project but don't execute them.
+
+        Shows the commands that would be executed in the output text area.
         """
         if not self.project_active:
             print("No project location selected.")
@@ -223,6 +233,8 @@ class MainWindow(QMainWindow):
     def _select_location(self) -> None:
         """
         Open a file dialog to select the project location.
+
+        Enables project creation buttons once a valid location is selected.
         """
         options = QFileDialog.Options()
         directory = QFileDialog.getExistingDirectory(self, "Select Project Location", "", options=options)
@@ -235,7 +247,13 @@ class MainWindow(QMainWindow):
             self.save_script.setEnabled(True)
             self.simple_script.setEnabled(True)
 
-    def _setup_current_template(self, index: str) -> None:
+    def _setup_current_template(self, index: int) -> None:
+        """
+        Setup the UI based on the selected template configuration.
+
+        Args:
+            index: Index of the selected template in the combo box.
+        """
         # we will now select the first item in the combo box and populate
         # the rest of the UI with the data from the JSON
         if hasattr(self, "template_choice") and self.template_choice.count() > 0:
@@ -249,7 +267,13 @@ class MainWindow(QMainWindow):
         # now add the extras to the extras group box
         self._generate_extras(data)
 
-    def _generate_options(self, data) -> None:
+    def _generate_options(self, data: Dict[str, Any]) -> None:
+        """
+        Generate package option checkboxes based on template data.
+
+        Args:
+            data: Template configuration data containing package information.
+        """
         options_layout = self.options_gb.layout()
         packages = data.get("packages", {})
         columns = 5
@@ -273,7 +297,13 @@ class MainWindow(QMainWindow):
             col = idx % columns
             options_layout.addWidget(checkbox, row, col)
 
-    def _generate_extras(self, data) -> None:
+    def _generate_extras(self, data: Dict[str, Any]) -> None:
+        """
+        Generate extra options (templates and pyproject.toml extras) based on template data.
+
+        Args:
+            data: Template configuration data containing extras information.
+        """
         extras_layout = self.extras_gb.layout()
         extras = data.get("extras", {})
         columns = 5
@@ -312,7 +342,12 @@ class MainWindow(QMainWindow):
             extras_layout.addWidget(toml_text_edit, len(templates) // columns + 1, 0, 1, columns)
 
     def load_ui(self) -> None:
-        """Load the UI from a .ui file and set up the connections."""
+        """
+        Load the UI from a .ui file and set up the connections.
+
+        Loads the UI file and automatically assigns child widgets with object names
+        as attributes of this class for easy access.
+        """
         loader = QUiLoader()
         ui_file = QFile("MainDialog.ui")
         ui_file.open(QFile.ReadOnly)
@@ -326,7 +361,13 @@ class MainWindow(QMainWindow):
                 setattr(self, name, child)
         ui_file.close()
 
-    def keyPressEvent(self, event):
+    def keyPressEvent(self, event) -> None:
+        """
+        Handle key press events.
+
+        Args:
+            event: The key press event.
+        """
         if event.key() == Qt.Key_Escape:
             self.close()
             ...
