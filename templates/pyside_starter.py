@@ -3,7 +3,7 @@ import sys
 
 from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import QApplication, QMainWindow,QWidget
+from PySide6.QtWidgets import QApplication, QMainWindow, QWidget
 
 
 class MainWindow(QMainWindow):

@@ -99,8 +99,6 @@ class MainWindow(QMainWindow):
             self.dry_run.setEnabled(enabled)
         if hasattr(self, "create_project"):
             self.create_project.setEnabled(enabled)
-        if hasattr(self, "save_script"):
-            self.save_script.setEnabled(enabled)
         if hasattr(self, "simple_script"):
             self.simple_script.setEnabled(enabled)
 
@@ -153,17 +151,24 @@ class MainWindow(QMainWindow):
             # Handle error (log, show message, etc.)
             print(f"Failed to load config: {e}")
 
-    def _parse_template_data(self, raw_data: Dict[str, Any]) -> Dict[str, ProjectTemplate]:
+    def _parse_template_data(
+        self, raw_data: Dict[str, Any]
+    ) -> Dict[str, ProjectTemplate]:
         """Parse raw JSON data into ProjectTemplate objects."""
         templates = {}
         for name, data in raw_data.items():
-            packages = [Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None) for pkg in data.get("packages", [])]
+            packages = [
+                Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None)
+                for pkg in data.get("packages", [])
+            ]
+            extras = data.get("extras", {})
+            pyproject_extras = extras.get("pyproject_extras") if extras else None
             templates[name] = ProjectTemplate(
                 name=name,
                 packages=packages,
                 description=data.get("description", []),
-                extras=data.get("extras", {}),
-                pyproject_extras=data.get("pyproject_extras"),
+                extras=extras,
+                pyproject_extras=pyproject_extras,
             )
         return templates
 
@@ -177,7 +182,6 @@ class MainWindow(QMainWindow):
         """Connect UI buttons to their respective handler methods."""
         self.select_location.clicked.connect(self._select_location)
         self.dry_run.clicked.connect(self._dry_run)
-        self.save_script.clicked.connect(self._save_script)
         self.simple_script.clicked.connect(self._create_simple_script)
         self.create_project.clicked.connect(self._create_project)
         self.template_choice.currentIndexChanged.connect(self._setup_current_template)
@@ -204,7 +208,17 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             return not progress.wasCanceled()
 
-        success = self.project_manager.create_project(project_config, enabled_packages, extra_files, progress_callback)
+        success = self.project_manager.create_project(
+            project_config, enabled_packages, extra_files, progress_callback
+        )
+        # now add the pyproject_extras if they exist in the project_config to the end of the pyproject.toml file
+        print("Adding Extras To PyProject.toml")
+        if self.findChild(QPlainTextEdit, "TomlText"):
+            toml_text_edit = self.findChild(QPlainTextEdit, "TomlText")
+            pyproject_extras = toml_text_edit.toPlainText()
+            pyproject_toml = project_config["project_path"] / "pyproject.toml"
+            with open(pyproject_toml, "a") as f:
+                f.write(pyproject_extras)
 
         progress.close()
 
@@ -223,6 +237,9 @@ class MainWindow(QMainWindow):
             "project_path": project_path,
             "project_name": self.project_name.text(),
             "python_version": python_version,
+            "vcs_option": "--vcs git" if self.use_git.isChecked() else "--vcs none",
+            "no_readme": "--no-readme" if self.no_readme.isChecked() else "",
+            "no_workspace": "--no-workspace" if self.no_workspace.isChecked() else "",
         }
 
     def _get_selected_python_version(self) -> str:
@@ -241,13 +258,6 @@ class MainWindow(QMainWindow):
             if cb.isChecked()
         ]
 
-    # def _get_enabled_extras(self) -> List[Extras]:
-    #     """Get all enabled packages from the UI checkboxes."""
-    #     return [
-    #         Extras(src=cb.property("src"), dst=cb.property("dst"), status=ExtrasStatus.ENABLED.value)
-    #         for cb in self._get_extras()
-    #         if cb.isChecked()
-    #     ]
     def _get_enabled_extras(self) -> List[Extras]:
         """Get all enabled extras from the UI checkboxes, supporting multiple src/dst per checkbox."""
         enabled_extras = []
@@ -256,7 +266,9 @@ class MainWindow(QMainWindow):
                 srcs = cb.property("src") or []
                 dsts = cb.property("dst") or []
                 # Optionally handle executable as a list, or default to False
-                executables = cb.property("executable") or [False] * max(len(srcs), len(dsts))
+                executables = cb.property("executable") or [False] * max(
+                    len(srcs), len(dsts)
+                )
                 # Ensure all are lists of the same length
                 for src, dst, executable in zip(srcs, dsts, executables):
                     enabled_extras.append(
@@ -272,7 +284,9 @@ class MainWindow(QMainWindow):
 
         layout = self.options_gb.layout()
         return [
-            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
+            layout.itemAt(i).widget()
+            for i in range(layout.count())
+            if isinstance(layout.itemAt(i).widget(), QCheckBox)
         ]
 
     def _get_extras(self) -> List[QCheckBox]:
@@ -282,7 +296,9 @@ class MainWindow(QMainWindow):
 
         layout = self.extras_gb.layout()
         return [
-            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
+            layout.itemAt(i).widget()
+            for i in range(layout.count())
+            if isinstance(layout.itemAt(i).widget(), QCheckBox)
         ]
 
     def _make_main_runnable(self, project_path: Path) -> None:
@@ -297,11 +313,6 @@ class MainWindow(QMainWindow):
         content = file_path.read_text()
         file_path.write_text(f"#!/usr/bin/env -S uv run --script\n{content}")
 
-    def _save_script(self) -> None:
-        """Save the generated script to a file."""
-        # TODO: Implement script saving functionality
-        self.logger.info("Save script functionality not yet implemented")
-
     def _dry_run(self) -> None:
         """Generate the commands to create the project but don't execute them."""
         if not self.is_project_active:
@@ -311,7 +322,9 @@ class MainWindow(QMainWindow):
         enabled_packages = self._get_enabled_packages()
         project_config = self._get_project_config()
         extra_files = self._get_enabled_extras()
-        commands = self.command_generator.generate_all_commands(project_config, enabled_packages, extra_files)
+        commands = self.command_generator.generate_all_commands(
+            project_config, enabled_packages, extra_files
+        )
 
         self.uv_output.append("Dry run - Commands that would be executed:\n")
         for cmd in commands:
@@ -325,7 +338,9 @@ class MainWindow(QMainWindow):
             return
 
         python_version = self._get_selected_python_version()
-        cmd = f"{self.uv_executable} init --script --python {python_version} {file_path}"
+        cmd = (
+            f"{self.uv_executable} init --script --python {python_version} {file_path}"
+        )
 
         try:
             subprocess.run(cmd, shell=True, check=True)
@@ -335,17 +350,23 @@ class MainWindow(QMainWindow):
             self.logger.error(f"Error creating script: {e}")
 
         if self.make_runnable.isChecked() and self.app_type.currentIndex() == 0:
-            self._make_runnable(self.project_location_prop + "/" + self.project_name.text() + "/main.py")
+            self._make_runnable(
+                self.project_location_prop + "/" + self.project_name.text() + "/main.py"
+            )
 
     def _get_script_file_path(self) -> Optional[Path]:
         """Get the file path for script creation using dialog."""
-        file_name = QFileDialog.getSaveFileName(self, "Save Python Script", "", "Python Files (*.py)")[0]
+        file_name = QFileDialog.getSaveFileName(
+            self, "Save Python Script", "", "Python Files (*.py)"
+        )[0]
         return Path(file_name) if file_name else None
 
     def _select_location(self) -> None:
         """Open a file dialog to select the project location."""
         options = QFileDialog.Options()
-        directory = QFileDialog.getExistingDirectory(self, "Select Project Location", "", options=options)
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Project Location", "", options=options
+        )
         if directory:
             self.project_location.setText(directory)
             self.project_location_prop = directory
@@ -398,11 +419,8 @@ class MainWindow(QMainWindow):
 
         layout = self.extras_gb.layout()
         self._clear_layout(layout)
-
         self._generate_template_checkboxes(template.extras, layout)
         self._generate_pyproject_extras(template.pyproject_extras, layout)
-
-    # def _generate_template_checkboxes(self, extras: Dict[str, Any], layout) -> None:
 
     def _generate_template_checkboxes(self, extras: Dict[str, Any], layout) -> None:
         """Generate checkboxes for template files."""
@@ -425,12 +443,19 @@ class MainWindow(QMainWindow):
             col = idx % self.config.default_columns
             layout.addWidget(checkbox, row, col)
 
-    def _generate_pyproject_extras(self, pyproject_extras: Optional[List[str]], layout) -> None:
+    def _generate_pyproject_extras(
+        self, pyproject_extras: Optional[List[str]], layout
+    ) -> None:
         """Generate text edit for pyproject.toml extras."""
         if not pyproject_extras:
             return
-
+        # see if we have a text edit already and remove
+        if hasattr(self, "TomlText"):
+            toml_text_edit = self.TomlText
+            layout.removeWidget(toml_text_edit)
+            toml_text_edit.deleteLater()
         toml_text_edit = QPlainTextEdit()
+        toml_text_edit.setObjectName("TomlText")
         toml_text_edit.setPlainText("\n".join(pyproject_extras))
         layout.addWidget(toml_text_edit, 10, 0, 1, self.config.default_columns)
 

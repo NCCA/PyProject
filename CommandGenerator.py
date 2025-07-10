@@ -11,9 +11,14 @@ class CommandGenerator:
     def __init__(self, uv_executable: str):
         self.uv_executable = uv_executable
 
-    def generate_init_command(self, project_path: Path, project_name: str, python_version: str) -> str:
+    def generate_init_command(self, project_config) -> str:
         """Generate the project initialization command."""
-        return f"{self.uv_executable} init --python {python_version} --name {project_name} {project_path}"
+        # (project_config["project_path"],)
+        # (project_config["project_name"],)
+        # (,)
+        return f"{self.uv_executable} init --python {project_config['python_version']} --name {project_config['project_name']}   {project_config['vcs_option']}  {project_config['no_readme']} {project_config['no_workspace']} {project_config['project_path']}"
+
+        # return f"{self.uv_executable} init --python {python_version} --name {project_name} {project_path}"
 
     def generate_add_command(self, package: Package, project_path: Path) -> str:
         """Generate a package addition command."""
@@ -27,17 +32,20 @@ class CommandGenerator:
         return f"cp templates/{extra.src} {project_path}/{extra.dst}"
 
     def generate_all_commands(
-        self, project_config: Dict[str, Any], enabled_packages: List[Package], extras: List[Extras]
+        self,
+        project_config: Dict[str, Any],
+        enabled_packages: List[Package],
+        extras: List[Extras],
     ) -> List[str]:
         """Generate all commands needed to create the project."""
         commands = []
 
         # Add init command
-        init_cmd = self.generate_init_command(
-            project_config["project_path"],
-            project_config["project_name"],
-            project_config["python_version"],
-        )
+        init_cmd = self.generate_init_command(project_config)
+        # project_config["project_path"],
+        # project_config["project_name"],
+        # project_config["python_version"],
+        #        )
         commands.append(init_cmd)
 
         # Add package commands
