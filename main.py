@@ -241,13 +241,29 @@ class MainWindow(QMainWindow):
             if cb.isChecked()
         ]
 
+    # def _get_enabled_extras(self) -> List[Extras]:
+    #     """Get all enabled packages from the UI checkboxes."""
+    #     return [
+    #         Extras(src=cb.property("src"), dst=cb.property("dst"), status=ExtrasStatus.ENABLED.value)
+    #         for cb in self._get_extras()
+    #         if cb.isChecked()
+    #     ]
     def _get_enabled_extras(self) -> List[Extras]:
-        """Get all enabled packages from the UI checkboxes."""
-        return [
-            Extras(src=cb.property("src"), dst=cb.property("dst"), status=ExtrasStatus.ENABLED.value)
-            for cb in self._get_extras()
-            if cb.isChecked()
-        ]
+        """Get all enabled extras from the UI checkboxes, supporting multiple src/dst per checkbox."""
+        enabled_extras = []
+        for cb in self._get_extras():
+            if cb.isChecked():
+                srcs = cb.property("src") or []
+                dsts = cb.property("dst") or []
+                # Optionally handle executable as a list, or default to False
+                executables = cb.property("executable") or [False] * max(len(srcs), len(dsts))
+                # Ensure all are lists of the same length
+                for src, dst, executable in zip(srcs, dsts, executables):
+                    enabled_extras.append(
+                        Extras(src=src, dst=dst, status=ExtrasStatus.ENABLED.value)
+                        # If you add executable to Extras, include it here
+                    )
+        return enabled_extras
 
     def _get_package_checkboxes(self) -> List[QCheckBox]:
         """Get all package checkboxes from the options layout."""
@@ -386,22 +402,28 @@ class MainWindow(QMainWindow):
         self._generate_template_checkboxes(template.extras, layout)
         self._generate_pyproject_extras(template.pyproject_extras, layout)
 
+    # def _generate_template_checkboxes(self, extras: Dict[str, Any], layout) -> None:
+
     def _generate_template_checkboxes(self, extras: Dict[str, Any], layout) -> None:
         """Generate checkboxes for template files."""
         templates = extras.get("templates", [])
 
-        for i in range(0, len(templates), 3):
-            if i + 2 < len(templates):
-                checkbox = QCheckBox()
-                checkbox.setText(templates[i + 2])
-                checkbox.setProperty("src", templates[i])
-                checkbox.setProperty("dst", templates[i + 1])
-                checkbox.setObjectName(f"template_{i // 3}")
-                checkbox.setChecked(True)
+        for idx, template in enumerate(templates):
+            # Handle both list and string for src/dst/executable for backward compatibility
+            src = template.get("src", [])
+            dst = template.get("dst", [])
+            description = template.get("description", "")
 
-                row = i // (self.config.default_columns * 3)
-                col = (i // 3) % self.config.default_columns
-                layout.addWidget(checkbox, row, col)
+            checkbox = QCheckBox()
+            checkbox.setText(description)
+            checkbox.setProperty("src", src)
+            checkbox.setProperty("dst", dst)
+            checkbox.setObjectName(f"template_{idx}")
+            checkbox.setChecked(True)
+
+            row = idx // self.config.default_columns
+            col = idx % self.config.default_columns
+            layout.addWidget(checkbox, row, col)
 
     def _generate_pyproject_extras(self, pyproject_extras: Optional[List[str]], layout) -> None:
         """Generate text edit for pyproject.toml extras."""

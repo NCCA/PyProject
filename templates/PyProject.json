@@ -8,9 +8,11 @@
     ],
     "extras": {
       "templates": [
-        "activate_direnv",
-        ".envrc",
-        "auto activate the virtual env on cd"
+        {
+          "src": ["activate_direnv"],
+          "dst": [".envrc"],
+          "description": "auto activate the virtual env on cd"
+        }
       ]
     }
   },
@@ -31,12 +33,16 @@
     ],
     "extras": {
       "templates": [
-        "ml_direnv",
-        ".envrc",
-        "auto activate the virtual env on cd",
-        "jupyter_functions",
-        "jupyter_functions.sh",
-        "add jupyter commands"
+        {
+          "src": ["ml_direnv"],
+          "dst": [".envrc"],
+          "description": "auto activate the virtual env on cd"
+        },
+        {
+          "src": ["jupyter_functions"],
+          "dst": ["jupyter_functions.sh"],
+          "description": "add jupyter commands"
+        }
       ],
       "pyproject_extras": [
         "[[tool.uv.index]]",
@@ -64,12 +70,16 @@
     ],
     "extras": {
       "templates": [
-        "activate_direnv",
-        ".envrc",
-        "auto activate the virtual env on cd",
-        "pyside_starter",
-        "main.py",
-        "Create a simple MainWindowApp"
+        {
+          "src": ["ml_direnv"],
+          "dst": [".envrc"],
+          "description": "auto activate the virtual env on cd"
+        },
+        {
+          "src": ["pyside_starter.py", "form.ui"],
+          "dst": ["main.py", "form.ui"],
+          "description": "Create a simple MainWindowApp"
+        }
       ]
     }
   }

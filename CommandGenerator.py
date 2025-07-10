@@ -23,6 +23,7 @@ class CommandGenerator:
 
     def generate_extra_command(self, extra: Extras, project_path: Path) -> str:
         """Generate a package addition command."""
+
         return f"cp templates/{extra.src} {project_path}/{extra.dst}"
 
     def generate_all_commands(

@@ -14,4 +14,7 @@ members = [
     "PySide",
     "ML",
     "MyProject",
+    "PS2",
+    "MyProject2",
+    "PS3",
 ]
