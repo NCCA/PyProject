@@ -14,7 +14,7 @@
       ]
     }
   },
-  "PySide6": {
+  "ML Project": {
     "packages": [
       ["matplotlib", "enabled", ">=3.10.1"],
       ["numpy", "enabled", ">=2.2.3"],
@@ -57,21 +57,20 @@
       ]
     }
   },
-  "nccapy project": {
+  "PySide project": {
     "packages": [["pyside6", "enabled"]],
     "description": [
-     "Simple PySide6 project will also generate a simple PySide6 template app"
+      "Simple PySide6 project will also generate a simple PySide6 template app"
     ],
     "extras": {
       "templates": [
         "activate_direnv",
         ".envrc",
-        "auto activate the virtual env on cd"
-        "pyside_starter"
-        "main.py"
+        "auto activate the virtual env on cd",
+        "pyside_starter",
+        "main.py",
         "Create a simple MainWindowApp"
       ]
     }
-  },
-
+  }
 }
