@@ -239,7 +239,7 @@ class MainWindow(QMainWindow):
 
     def _get_project_config(self) -> Dict[str, Any]:
         """Get the current project configuration."""
-        project_path = Path(self.project_location) / self.project_name.text()
+        project_path = Path(self.project_location_prop) / self.project_name.text()
         python_version = self._get_selected_python_version()
 
         return {
