@@ -77,12 +77,12 @@ class MainWindow(QMainWindow):
         self.project_manager = ProjectManager(self.command_generator)
 
     @property
-    def project_location(self) -> Optional[str]:
+    def project_location_prop(self) -> Optional[str]:
         """Get the current project location."""
         return self._project_location
 
-    @project_location.setter
-    def project_location(self, value: str) -> None:
+    @project_location_prop.setter
+    def project_location_prop(self, value: str) -> None:
         """Set the project location and update UI state."""
         self._project_location = value
         self._set_buttons_enabled(bool(value))
@@ -343,7 +343,7 @@ class MainWindow(QMainWindow):
         )
         if directory:
             self.project_location.setText(directory)
-            self.project_location = directory
+            self.project_location_prop = directory
 
     def _setup_current_template(self, index: int) -> None:
         """Setup the UI based on the selected template configuration."""
