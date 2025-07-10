@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QFile, Qt
+from PySide6.QtGui import QIcon
 from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import (
     QApplication,
@@ -20,14 +21,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+import resources_rc  # noqa: F401 qt resource
 from AppConfig import AppConfig
 from CommandGenerator import CommandGenerator
+from Extras import Extras, ExtrasStatus
+from Logger import logger
 from Package import Package, PackageStatus
 from ProjectManager import ProjectManager
 from ProjectTemplate import ProjectTemplate
-from PySide6.QtGui import QIcon
-from Logger import logger
-import resources_rc  # noqa: F401 qt resource
 
 
 class MainWindow(QMainWindow):
@@ -126,31 +127,13 @@ class MainWindow(QMainWindow):
             if self.config.default_python_version in text:
                 self.which_python.setCurrentIndex(idx)
 
-    # def load_json_config(self, json_path: str) -> None:
-    #     """
-    #     Load project template configurations from a JSON file and setup UI.
-    #     """
-    #     try:
-    #         with open(json_path, "r", encoding="utf-8") as f:
-    #             raw_data = json.load(f)
-
-    #         self.template_data = self._parse_template_data(raw_data)
-    #         self._populate_template_combo()
-    #         self._setup_current_template(0)
-    #         self._set_buttons_enabled(False)
-
-    #     except FileNotFoundError:
-    #         self.logger.error(f"Configuration file not found: {json_path}")
-    #         raise
-    #     except json.JSONDecodeError as e:
-    #         self.logger.error(f"Invalid JSON in configuration file: {e}")
-    #         raise
     def load_json_config(self, json_path: str) -> None:
         """
         Load project template configurations from a JSON file (including Qt Resource) and setup UI.
         """
-        from PySide6.QtCore import QFile, QIODevice, QTextStream
         import json
+
+        from PySide6.QtCore import QFile, QIODevice, QTextStream
 
         try:
             file = QFile(json_path)
@@ -170,16 +153,11 @@ class MainWindow(QMainWindow):
             # Handle error (log, show message, etc.)
             print(f"Failed to load config: {e}")
 
-    def _parse_template_data(
-        self, raw_data: Dict[str, Any]
-    ) -> Dict[str, ProjectTemplate]:
+    def _parse_template_data(self, raw_data: Dict[str, Any]) -> Dict[str, ProjectTemplate]:
         """Parse raw JSON data into ProjectTemplate objects."""
         templates = {}
         for name, data in raw_data.items():
-            packages = [
-                Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None)
-                for pkg in data.get("packages", [])
-            ]
+            packages = [Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None) for pkg in data.get("packages", [])]
             templates[name] = ProjectTemplate(
                 name=name,
                 packages=packages,
@@ -212,6 +190,7 @@ class MainWindow(QMainWindow):
 
         enabled_packages = self._get_enabled_packages()
         project_config = self._get_project_config()
+        extra_files = self._get_enabled_extras()
 
         # Create progress dialog
         progress = QProgressDialog("Creating project...", "Cancel", 0, 100, self)
@@ -225,9 +204,7 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             return not progress.wasCanceled()
 
-        success = self.project_manager.create_project(
-            project_config, enabled_packages, progress_callback
-        )
+        success = self.project_manager.create_project(project_config, enabled_packages, extra_files, progress_callback)
 
         progress.close()
 
@@ -264,6 +241,14 @@ class MainWindow(QMainWindow):
             if cb.isChecked()
         ]
 
+    def _get_enabled_extras(self) -> List[Extras]:
+        """Get all enabled packages from the UI checkboxes."""
+        return [
+            Extras(src=cb.property("src"), dst=cb.property("dst"), status=ExtrasStatus.ENABLED.value)
+            for cb in self._get_extras()
+            if cb.isChecked()
+        ]
+
     def _get_package_checkboxes(self) -> List[QCheckBox]:
         """Get all package checkboxes from the options layout."""
         if not hasattr(self, "options_gb"):
@@ -271,9 +256,17 @@ class MainWindow(QMainWindow):
 
         layout = self.options_gb.layout()
         return [
-            layout.itemAt(i).widget()
-            for i in range(layout.count())
-            if isinstance(layout.itemAt(i).widget(), QCheckBox)
+            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
+        ]
+
+    def _get_extras(self) -> List[QCheckBox]:
+        """Get all package checkboxes from the options layout."""
+        if not hasattr(self, "extras_gb"):
+            return []
+
+        layout = self.extras_gb.layout()
+        return [
+            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
         ]
 
     def _make_main_runnable(self, project_path: Path) -> None:
@@ -301,9 +294,8 @@ class MainWindow(QMainWindow):
 
         enabled_packages = self._get_enabled_packages()
         project_config = self._get_project_config()
-        commands = self.command_generator.generate_all_commands(
-            project_config, enabled_packages
-        )
+        extra_files = self._get_enabled_extras()
+        commands = self.command_generator.generate_all_commands(project_config, enabled_packages, extra_files)
 
         self.uv_output.append("Dry run - Commands that would be executed:\n")
         for cmd in commands:
@@ -317,9 +309,7 @@ class MainWindow(QMainWindow):
             return
 
         python_version = self._get_selected_python_version()
-        cmd = (
-            f"{self.uv_executable} init --script --python {python_version} {file_path}"
-        )
+        cmd = f"{self.uv_executable} init --script --python {python_version} {file_path}"
 
         try:
             subprocess.run(cmd, shell=True, check=True)
@@ -328,19 +318,18 @@ class MainWindow(QMainWindow):
         except subprocess.CalledProcessError as e:
             self.logger.error(f"Error creating script: {e}")
 
+        if self.make_runnable.isChecked() and self.app_type.currentIndex() == 0:
+            self._make_runnable(self.project_location_prop + "/" + self.project_name.text() + "/main.py")
+
     def _get_script_file_path(self) -> Optional[Path]:
         """Get the file path for script creation using dialog."""
-        file_name = QFileDialog.getSaveFileName(
-            self, "Save Python Script", "", "Python Files (*.py)"
-        )[0]
+        file_name = QFileDialog.getSaveFileName(self, "Save Python Script", "", "Python Files (*.py)")[0]
         return Path(file_name) if file_name else None
 
     def _select_location(self) -> None:
         """Open a file dialog to select the project location."""
         options = QFileDialog.Options()
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Project Location", "", options=options
-        )
+        directory = QFileDialog.getExistingDirectory(self, "Select Project Location", "", options=options)
         if directory:
             self.project_location.setText(directory)
             self.project_location_prop = directory
@@ -414,9 +403,7 @@ class MainWindow(QMainWindow):
                 col = (i // 3) % self.config.default_columns
                 layout.addWidget(checkbox, row, col)
 
-    def _generate_pyproject_extras(
-        self, pyproject_extras: Optional[List[str]], layout
-    ) -> None:
+    def _generate_pyproject_extras(self, pyproject_extras: Optional[List[str]], layout) -> None:
         """Generate text edit for pyproject.toml extras."""
         if not pyproject_extras:
             return

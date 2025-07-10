@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict, List
 
+from Extras import Extras
 from Package import Package
 
 
@@ -10,9 +11,7 @@ class CommandGenerator:
     def __init__(self, uv_executable: str):
         self.uv_executable = uv_executable
 
-    def generate_init_command(
-        self, project_path: Path, project_name: str, python_version: str
-    ) -> str:
+    def generate_init_command(self, project_path: Path, project_name: str, python_version: str) -> str:
         """Generate the project initialization command."""
         return f"{self.uv_executable} init --python {python_version} --name {project_name} {project_path}"
 
@@ -22,8 +21,12 @@ class CommandGenerator:
             return f"{self.uv_executable} add '{package.version_spec}' --project {project_path}"
         return f"{self.uv_executable} add {package.name} --project {project_path}"
 
+    def generate_extra_command(self, extra: Extras, project_path: Path) -> str:
+        """Generate a package addition command."""
+        return f"cp templates/{extra.src} {project_path}/{extra.dst}"
+
     def generate_all_commands(
-        self, project_config: Dict[str, Any], enabled_packages: List[Package]
+        self, project_config: Dict[str, Any], enabled_packages: List[Package], extras: List[Extras]
     ) -> List[str]:
         """Generate all commands needed to create the project."""
         commands = []
@@ -40,6 +43,11 @@ class CommandGenerator:
         for package in enabled_packages:
             if package.is_enabled:
                 cmd = self.generate_add_command(package, project_config["project_path"])
+                commands.append(cmd)
+        # Add package commands
+        for extra in extras:
+            if extra.is_enabled:
+                cmd = self.generate_extra_command(extra, project_config["project_path"])
                 commands.append(cmd)
 
         return commands

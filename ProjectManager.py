@@ -17,21 +17,18 @@ class ProjectManager:
         self,
         project_config: Dict[str, Any],
         enabled_packages: List[Package],
+        extras: List[Package],
         progress_callback=None,
     ) -> bool:
         """Create a project with the given configuration."""
-        commands = self.command_generator.generate_all_commands(
-            project_config, enabled_packages
-        )
+        commands = self.command_generator.generate_all_commands(project_config, enabled_packages, extras)
 
         for idx, cmd in enumerate(commands):
             if progress_callback:
                 progress_callback(idx, f"Executing: {cmd}")
 
             try:
-                result = subprocess.run(
-                    cmd, shell=True, check=True, capture_output=True, text=True
-                )
+                result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
                 if progress_callback:
                     progress_callback(idx, result.stdout)
                     if result.stderr:

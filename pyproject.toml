@@ -8,3 +8,10 @@ dependencies = [
     "pyinstaller>=6.14.2",
     "pyside6>=6.9.1",
 ]
+
+[tool.uv.workspace]
+members = [
+    "PySide",
+    "ML",
+    "MyProject",
+]

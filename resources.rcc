@@ -5,5 +5,8 @@
         <file>templates/PyProject.json</file>
         <file>templates/ml_direnv</file>
         <file>ui/MainDialog.ui</file>
+        <file>templates/pyside_starter.py</file>
+        <file>templates/form.ui</file>
+
     </qresource>
 </RCC>
