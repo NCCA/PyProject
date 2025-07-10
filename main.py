@@ -1,14 +1,12 @@
 #!/usr/bin/env -S uv run --script
-
-#!/usr/bin/env -S uv run --script
-
 import json
+import logging
 import shutil
 import stat
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from PySide6.QtCore import QFile, Qt
 from PySide6.QtUiTools import QUiLoader
@@ -22,36 +20,93 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from AppConfig import AppConfig
+from CommandGenerator import CommandGenerator
+from Package import Package
+from ProjectManager import ProjectManager
+from ProjectTemplate import ProjectTemplate
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    """Main application window."""
+
+    def __init__(self, config: Optional[AppConfig] = None) -> None:
         """Initialize the MainWindow with UI setup and configuration loading."""
         super().__init__()
-        self.setWindowTitle("PyProject")
-        self.resize(1024, 720)
-        self.load_ui()
-        self.load_json_config("PyProject.json")
+        self.config = config or AppConfig()
+        self.logger = logging.getLogger(__name__)
+
+        # Initialize state
+        self._project_location: Optional[str] = None
+        self.template_data: Dict[str, Any] = {}
+        self.uv_output: Optional[QPlainTextEdit] = None
+
+        # Setup UI and tools
+        self._setup_window()
         self._find_tools()
+        self._setup_managers()
+        self.load_ui()
+        self.load_json_config(self.config.config_file)
         self._get_python_versions()
         self._connect_buttons()
-        self.project_active = False
+
+    def _setup_window(self) -> None:
+        """Setup basic window properties."""
+        self.setWindowTitle(self.config.window_title)
+        self.resize(*self.config.window_size)
 
     def _find_tools(self) -> None:
         """Find and store paths to uv and uvx executables."""
         self.uv_executable = shutil.which("uv")
         self.uvx_executable = shutil.which("uvx")
-        print(f"{self.uv_executable=}")
-        print(f"{self.uvx_executable=}")
+
+        if not self.uv_executable:
+            self.logger.error("UV executable not found. Please install UV.")
+            raise RuntimeError("UV executable not found")
+
+        self.logger.info(f"Found uv: {self.uv_executable}")
+        self.logger.info(f"Found uvx: {self.uvx_executable}")
+
+    def _setup_managers(self) -> None:
+        """Initialize manager classes."""
+        self.command_generator = CommandGenerator(self.uv_executable)
+        self.project_manager = ProjectManager(self.command_generator)
+
+    @property
+    def project_location(self) -> Optional[str]:
+        """Get the current project location."""
+        return self._project_location
+
+    @project_location.setter
+    def project_location(self, value: str) -> None:
+        """Set the project location and update UI state."""
+        self._project_location = value
+        self._set_buttons_enabled(bool(value))
+
+    @property
+    def is_project_active(self) -> bool:
+        """Check if a project location is set."""
+        return self._project_location is not None
+
+    def _set_buttons_enabled(self, enabled: bool) -> None:
+        """Enable or disable project-related buttons."""
+        if hasattr(self, "dry_run"):
+            self.dry_run.setEnabled(enabled)
+        if hasattr(self, "create_project"):
+            self.create_project.setEnabled(enabled)
+        if hasattr(self, "save_script"):
+            self.save_script.setEnabled(enabled)
+        if hasattr(self, "simple_script"):
+            self.simple_script.setEnabled(enabled)
 
     def _get_python_versions(self) -> None:
         """
         Fetch available Python versions using uv and populate the version combo box.
-
-        Uses 'uv python list --output-format json' to get available Python versions
-        and populates the which_python combo box with them.
         """
-        import subprocess
-
         try:
             result = subprocess.run(
                 [self.uv_executable, "python", "list", "--output-format", "json"],
@@ -61,40 +116,55 @@ class MainWindow(QMainWindow):
             )
             versions = json.loads(result.stdout)
         except subprocess.CalledProcessError as e:
-            print(f"Error fetching Python versions: {e}")
+            self.logger.error(f"Error fetching Python versions: {e}")
             return
 
-        # print([version["version"] for version in versions])
         for idx, version in enumerate(versions):
             text = f"{version['version']} , {version['implementation']}"
             self.which_python.addItem(text)
-            # default to python 3.13.3 if it exists
-            if "3.13.2" in text:
+            # Default to specified version if it exists
+            if self.config.default_python_version in text:
                 self.which_python.setCurrentIndex(idx)
 
     def load_json_config(self, json_path: str) -> None:
         """
         Load project template configurations from a JSON file and setup UI.
-
-        Args:
-            json_path: Path to the JSON configuration file.
         """
-        with open(json_path, "r", encoding="utf-8") as f:
-            self.template_data = json.load(f)
-        print(self.template_data)
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                raw_data = json.load(f)
 
-        # now populate the combo box with the keys from the JSON data
-        for key in self.template_data.keys():
-            # Assuming you have a combo box named `comboBox`
-            if hasattr(self, "template_choice"):
-                self.template_choice.addItem(key)
+            self.template_data = self._parse_template_data(raw_data)
+            self._populate_template_combo()
             self._setup_current_template(0)
+            self._set_buttons_enabled(False)
 
-        # Default disable buttons until we have a project location
-        self.dry_run.setEnabled(False)
-        self.create_project.setEnabled(False)
-        self.save_script.setEnabled(False)
-        self.save_script.setEnabled(False)
+        except FileNotFoundError:
+            self.logger.error(f"Configuration file not found: {json_path}")
+            raise
+        except json.JSONDecodeError as e:
+            self.logger.error(f"Invalid JSON in configuration file: {e}")
+            raise
+
+    def _parse_template_data(self, raw_data: Dict[str, Any]) -> Dict[str, ProjectTemplate]:
+        """Parse raw JSON data into ProjectTemplate objects."""
+        templates = {}
+        for name, data in raw_data.items():
+            packages = [Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None) for pkg in data.get("packages", [])]
+            templates[name] = ProjectTemplate(
+                name=name,
+                packages=packages,
+                description=data.get("description", []),
+                extras=data.get("extras", {}),
+                pyproject_extras=data.get("pyproject_extras"),
+            )
+        return templates
+
+    def _populate_template_combo(self) -> None:
+        """Populate the template choice combo box."""
+        if hasattr(self, "template_choice"):
+            for template_name in self.template_data.keys():
+                self.template_choice.addItem(template_name)
 
     def _connect_buttons(self) -> None:
         """Connect UI buttons to their respective handler methods."""
@@ -103,278 +173,259 @@ class MainWindow(QMainWindow):
         self.save_script.clicked.connect(self._save_script)
         self.simple_script.clicked.connect(self._create_simple_script)
         self.create_project.clicked.connect(self._create_project)
-        self.template_choice.currentIndexChanged.connect(lambda index: self._setup_current_template(index))
+        self.template_choice.currentIndexChanged.connect(self._setup_current_template)
 
     def _create_project(self) -> None:
-        """
-        This will create the project in the selected location.
-        """
-        if not self.project_active:
-            print("No project location selected.")
+        """Create the project in the selected location."""
+        if not self.is_project_active:
+            self.logger.warning("No project location selected.")
             return
 
-        commands = self._generate_uv_commands()
-        if not commands:
-            print("No commands generated. Please check your configuration.")
-            return
+        enabled_packages = self._get_enabled_packages()
+        project_config = self._get_project_config()
 
-        # Show a progress dialog while executing the commands
-        progress = QProgressDialog("Running commands...", "Cancel", 0, len(commands), self)
+        # Create progress dialog
+        progress = QProgressDialog("Creating project...", "Cancel", 0, 100, self)
         progress.setWindowTitle("Progress")
         progress.setWindowModality(Qt.WindowModal)
         progress.show()
 
-        # Execute the commands
-        for idx, cmd in enumerate(commands):
-            self.uv_output.append(f"Executing: {cmd}")
-            progress.setValue(idx)
+        def progress_callback(step: int, message: str):
+            self.uv_output.append(message)
+            progress.setValue(step)
             QApplication.processEvents()
-            if progress.wasCanceled():
-                self.uv_output.append("Operation canceled by user.\n")
-                break
-            try:
-                result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
-                self.uv_output.append(result.stdout)
-                if result.stderr:
-                    self.uv_output.append(result.stderr)
-            except subprocess.CalledProcessError as e:
-                self.uv_output.append(f"Error executing command: {e}\n")
-                if e.stdout:
-                    self.uv_output.append(e.stdout)
-                if e.stderr:
-                    self.uv_output.append(e.stderr)
-            self.uv_output.update()
-        self.uv_output.append("DONE\n\n")
-        if self.make_runnable.isChecked() and self.app_type.currentIndex() == 0:
-            self._make_runnable(self.project_location.text() + "/" + self.project_name.text() + "/main.py")
-        progress.setValue(len(commands))
+            return not progress.wasCanceled()
+
+        success = self.project_manager.create_project(project_config, enabled_packages, progress_callback)
+
+        progress.close()
+
+        if success:
+            self.uv_output.append("Project created successfully!\n\n")
+            self._make_main_runnable(project_config["project_path"])
+        else:
+            self.uv_output.append("Project creation failed.\n\n")
+
+    def _get_project_config(self) -> Dict[str, Any]:
+        """Get the current project configuration."""
+        project_path = Path(self.project_location) / self.project_name.text()
+        python_version = self._get_selected_python_version()
+
+        return {
+            "project_path": project_path,
+            "project_name": self.project_name.text(),
+            "python_version": python_version,
+        }
+
+    def _get_selected_python_version(self) -> str:
+        """Get the selected Python version."""
+        return self.which_python.currentText().split(",")[0].strip()
+
+    def _get_enabled_packages(self) -> List[Package]:
+        """Get all enabled packages from the UI checkboxes."""
+        return [
+            Package(name=cb.objectName(), status=PackageStatus.ENABLED.value, version=cb.property("version"))
+            for cb in self._get_package_checkboxes()
+            if cb.isChecked()
+        ]
+
+    def _get_package_checkboxes(self) -> List[QCheckBox]:
+        """Get all package checkboxes from the options layout."""
+        if not hasattr(self, "options_gb"):
+            return []
+
+        layout = self.options_gb.layout()
+        return [
+            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
+        ]
+
+    def _make_main_runnable(self, project_path: Path) -> None:
+        """Make the main.py file executable with proper shebang."""
+        main_py = project_path / "main.py"
+        if main_py.exists():
+            self._make_script_executable(main_py)
+
+    def _make_script_executable(self, file_path: Path) -> None:
+        """Make a Python script executable with proper shebang."""
+        file_path.chmod(file_path.stat().st_mode | stat.S_IEXEC)
+        content = file_path.read_text()
+        file_path.write_text(f"#!/usr/bin/env -S uv run --script\n{content}")
 
     def _save_script(self) -> None:
-        """Save the generated script to a file (placeholder implementation)."""
-        ...
+        """Save the generated script to a file."""
+        # TODO: Implement script saving functionality
+        self.logger.info("Save script functionality not yet implemented")
 
     def _dry_run(self) -> None:
-        """
-        Generate the commands to create the project but don't execute them.
-
-        Shows the commands that would be executed in the output text area.
-        """
-        if not self.project_active:
-            print("No project location selected.")
+        """Generate the commands to create the project but don't execute them."""
+        if not self.is_project_active:
+            self.logger.warning("No project location selected.")
             return
 
-        commands = self._generate_uv_commands()
-        # append the commands to the output text edit
+        enabled_packages = self._get_enabled_packages()
+        project_config = self._get_project_config()
+        commands = self.command_generator.generate_all_commands(project_config, enabled_packages)
+
+        self.uv_output.append("Dry run - Commands that would be executed:\n")
         for cmd in commands:
-            self.uv_output.append(cmd)
+            self.uv_output.append(f"  {cmd}")
+        self.uv_output.append("\n")
 
     def _create_simple_script(self) -> None:
-        # grab a python file name using the dialog
+        """Create a simple executable Python script."""
+        file_path = self._get_script_file_path()
+        if not file_path:
+            return
+
+        python_version = self._get_selected_python_version()
+        cmd = f"{self.uv_executable} init --script --python {python_version} {file_path}"
+
+        try:
+            subprocess.run(cmd, shell=True, check=True)
+            self._make_script_executable(file_path)
+            self.logger.info(f"Created executable script: {file_path}")
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Error creating script: {e}")
+
+    def _get_script_file_path(self) -> Optional[Path]:
+        """Get the file path for script creation using dialog."""
         file_name = QFileDialog.getSaveFileName(self, "Save Python Script", "", "Python Files (*.py)")[0]
-        if file_name:
-            python_version = self.which_python.currentText().split(",")[0].strip()
-            cmd = f"{self.uv_executable} init --script --python {python_version}  {file_name}"
-            print(cmd)
-            try:
-                subprocess.run(cmd, shell=True, check=True)
-                if self.make_runnable.isChecked():
-                    self._make_runnable(file_name)
-
-            except subprocess.CalledProcessError as e:
-                print(f"Error executing command: {e}")
-
-    def _make_runnable(self, file_name):
-        exe_file = Path(file_name)
-        exe_file.chmod(exe_file.stat().st_mode | stat.S_IEXEC)
-        content = exe_file.read_text()
-        exe_file.write_text(f"#!/usr/bin/env -S uv run --script\n{content}")
-
-    def _generate_uv_commands(self) -> list[str]:
-        commands = []
-        generator = ["--app", "--package", "--lib"]
-        gen_type = generator[self.app_type.currentIndex()]
-        # first to create the project folder
-        project_path = Path(self.project_location.text()) / self.project_name.text()
-        python_version = self.which_python.currentText().split(",")[0].strip()
-        vcs_option = "--vcs git" if self.use_git.isChecked() else "--vcs none"
-        no_readme = "--no-readme" if self.no_readme.isChecked() else ""
-        no_workspace = "--no-workspace" if self.no_workspace.isChecked() else ""
-        cmd = f"{self.uv_executable} init {gen_type} --python {python_version} --name {self.project_name.text()} {vcs_option} {no_readme} {no_workspace} {project_path}"
-        commands.append(cmd)
-        # Now we will add the packages
-        # we will iterate over the checkboxes in the options group box and add the ones that are checked
-        options_layout = self.options_gb.layout()
-        for i in range(options_layout.count()):
-            checkbox = options_layout.itemAt(i).widget()
-            if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
-                package_name = checkbox.objectName()
-                # Check if the checkbox has a version property
-                # if it does, we will add it to the command
-                version = checkbox.property("version")
-                if version:
-                    cmd = f"{self.uv_executable} add '{package_name}{version}' --project {project_path}"
-                else:
-                    cmd = f"{self.uv_executable} add {package_name} --project {project_path}"
-                commands.append(cmd)
-
-        # Now we will add the extras
-        extras_layout = self.extras_gb.layout()
-        for i in range(extras_layout.count()):
-            checkbox = extras_layout.itemAt(i).widget()
-            if isinstance(checkbox, QCheckBox) and checkbox.isChecked():
-                src = checkbox.property("src")
-                dst = checkbox.property("dst")
-                if src and dst:
-                    cmd = f"cp templates/{src} {project_path}/{dst}"
-                    commands.append(cmd)
-
-        return commands
+        return Path(file_name) if file_name else None
 
     def _select_location(self) -> None:
-        """
-        Open a file dialog to select the project location.
-
-        Enables project creation buttons once a valid location is selected.
-        """
+        """Open a file dialog to select the project location."""
         options = QFileDialog.Options()
         directory = QFileDialog.getExistingDirectory(self, "Select Project Location", "", options=options)
         if directory:
             self.project_location.setText(directory)
-            self.project_active = True
-            # enable the buttons
-            self.dry_run.setEnabled(True)
-            self.create_project.setEnabled(True)
-            self.save_script.setEnabled(True)
-            self.simple_script.setEnabled(True)
+            self.project_location = directory
 
     def _setup_current_template(self, index: int) -> None:
-        """
-        Setup the UI based on the selected template configuration.
+        """Setup the UI based on the selected template configuration."""
+        if not hasattr(self, "template_choice") or self.template_choice.count() == 0:
+            return
 
-        Args:
-            index: Index of the selected template in the combo box.
-        """
-        # we will now select the first item in the combo box and populate
-        # the rest of the UI with the data from the JSON
-        if hasattr(self, "template_choice") and self.template_choice.count() > 0:
-            self.template_choice.setCurrentIndex(index)
-            data = self.template_data[self.template_choice.currentText()]
-        # we have desciption as an array of strings that needs to be \n seperated so add this to the QPlainTextEdit
+        self.template_choice.setCurrentIndex(index)
+        template_name = self.template_choice.currentText()
+        template = self.template_data.get(template_name)
+
+        if not template:
+            return
+
+        # Update description
         self.description_text.clear()
-        self.description_text.setPlainText("\n".join(data.get("description", [])))
-        # now add all the options to the options group_box
-        self._generate_options(data)
-        # now add the extras to the extras group box
-        self._generate_extras(data)
+        self.description_text.setPlainText("\n".join(template.description))
 
-    def _generate_options(self, data: Dict[str, Any]) -> None:
-        """
-        Generate package option checkboxes based on template data.
+        # Generate options and extras
+        self._generate_options(template)
+        self._generate_extras(template)
 
-        Args:
-            data: Template configuration data containing package information.
-        """
-        options_layout = self.options_gb.layout()
-        packages = data.get("packages", {})
-        columns = 5
-        # first remove all existing widgets in the layout
-        for i in reversed(range(options_layout.count())):
-            options_layout.itemAt(i).widget().deleteLater()
+    def _generate_options(self, template: ProjectTemplate) -> None:
+        """Generate package option checkboxes based on template data."""
+        if not hasattr(self, "options_gb"):
+            return
 
-        for idx, package in enumerate(packages):
-            # create a checkbox for each package
+        layout = self.options_gb.layout()
+        self._clear_layout(layout)
+
+        for idx, package in enumerate(template.packages):
             checkbox = QCheckBox()
-            checkbox.setObjectName(package[0])
-            checkbox.setText(package[0])
-            # set the checkbox to be checked if the package is selected
-            # we have "enabled" or "disabled" in the package tuple
-            checkbox.setChecked(package[1] == "enabled")
-            # Check for a third element in the tuple for version and add as attribute if it exists
-            if len(package) > 2:
-                checkbox.setProperty("version", package[2])
+            checkbox.setObjectName(package.name)
+            checkbox.setText(package.name)
+            checkbox.setChecked(package.is_enabled)
 
-            row = idx // columns
-            col = idx % columns
-            options_layout.addWidget(checkbox, row, col)
+            if package.version:
+                checkbox.setProperty("version", package.version)
 
-    def _generate_extras(self, data: Dict[str, Any]) -> None:
-        """
-        Generate extra options (templates and pyproject.toml extras) based on template data.
+            row = idx // self.config.default_columns
+            col = idx % self.config.default_columns
+            layout.addWidget(checkbox, row, col)
 
-        Args:
-            data: Template configuration data containing extras information.
-        """
-        extras_layout = self.extras_gb.layout()
-        extras = data.get("extras", {})
-        columns = 5
-        # first remove all existing widgets in the layout
-        for i in reversed(range(extras_layout.count())):
-            extras_layout.itemAt(i).widget().deleteLater()
+    def _generate_extras(self, template: ProjectTemplate) -> None:
+        """Generate extra options based on template data."""
+        if not hasattr(self, "extras_gb"):
+            return
 
-        # find any templates to copy
+        layout = self.extras_gb.layout()
+        self._clear_layout(layout)
+
+        self._generate_template_checkboxes(template.extras, layout)
+        self._generate_pyproject_extras(template.pyproject_extras, layout)
+
+    def _generate_template_checkboxes(self, extras: Dict[str, Any], layout) -> None:
+        """Generate checkboxes for template files."""
         templates = extras.get("templates", [])
-        print(templates)
-        print(len(templates))
-        for i in range(0, len(templates), 3):
-            # create a checkbox for each template
-            checkbox = QCheckBox()
-            checkbox.setText(templates[i + 2])
-            print(templates[i + 2])
-            checkbox.setProperty("src", templates[i])
-            checkbox.setProperty("dst", templates[i + 1])
-            checkbox.setObjectName(f"template_{i + 1}")
-            # set the checkbox to be checked if the template is selected
-            checkbox.setChecked(True)
-            row = i // columns
-            col = i % columns
-            extras_layout.addWidget(checkbox, row, col)
 
-        toml_data = extras.get("pyproject_extras", [])
-        print(data)
-        print(toml_data)
-        print(extras)
-        if toml_data:
-            # create a plain text edit for the pyproject.toml extras
-            toml_text_edit = QPlainTextEdit()
-            for text in toml_data:
-                toml_text_edit.appendPlainText(text)
-                print(text)
-            extras_layout.addWidget(toml_text_edit, len(templates) // columns + 1, 0, 1, columns)
+        for i in range(0, len(templates), 3):
+            if i + 2 < len(templates):
+                checkbox = QCheckBox()
+                checkbox.setText(templates[i + 2])
+                checkbox.setProperty("src", templates[i])
+                checkbox.setProperty("dst", templates[i + 1])
+                checkbox.setObjectName(f"template_{i // 3}")
+                checkbox.setChecked(True)
+
+                row = i // (self.config.default_columns * 3)
+                col = (i // 3) % self.config.default_columns
+                layout.addWidget(checkbox, row, col)
+
+    def _generate_pyproject_extras(self, pyproject_extras: Optional[List[str]], layout) -> None:
+        """Generate text edit for pyproject.toml extras."""
+        if not pyproject_extras:
+            return
+
+        toml_text_edit = QPlainTextEdit()
+        toml_text_edit.setPlainText("\n".join(pyproject_extras))
+        layout.addWidget(toml_text_edit, 10, 0, 1, self.config.default_columns)
+
+    def _clear_layout(self, layout) -> None:
+        """Clear all widgets from a layout."""
+        for i in reversed(range(layout.count())):
+            item = layout.itemAt(i)
+            if item and item.widget():
+                item.widget().deleteLater()
 
     def load_ui(self) -> None:
-        """
-        Load the UI from a .ui file and set up the connections.
+        """Load the UI from a .ui file and set up the connections."""
+        try:
+            loader = QUiLoader()
+            ui_file = QFile(self.config.ui_file)
+            ui_file.open(QFile.ReadOnly)
 
-        Loads the UI file and automatically assigns child widgets with object names
-        as attributes of this class for easy access.
-        """
-        loader = QUiLoader()
-        ui_file = QFile("MainDialog.ui")
-        ui_file.open(QFile.ReadOnly)
-        # Load the UI into `self` as the parent
-        loaded_ui = loader.load(ui_file, self)
-        self.setCentralWidget(loaded_ui)
-        # add all children with object names to `self`
-        for child in loaded_ui.findChildren(QWidget):
-            name = child.objectName()
-            if name:
-                setattr(self, name, child)
-        ui_file.close()
+            loaded_ui = loader.load(ui_file, self)
+            self.setCentralWidget(loaded_ui)
+
+            # Add all children with object names as attributes
+            for child in loaded_ui.findChildren(QWidget):
+                name = child.objectName()
+                if name:
+                    setattr(self, name, child)
+
+            ui_file.close()
+
+        except Exception as e:
+            self.logger.error(f"Error loading UI file: {e}")
+            raise
 
     def keyPressEvent(self, event) -> None:
-        """
-        Handle key press events.
-
-        Args:
-            event: The key press event.
-        """
+        """Handle key press events."""
         if event.key() == Qt.Key_Escape:
             self.close()
-            ...
+
+
+def main():
+    """Main application entry point."""
+    app = QApplication(sys.argv)
+
+    try:
+        config = AppConfig()
+        window = MainWindow(config)
+        window.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        logger.error(f"Application error: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    main()
