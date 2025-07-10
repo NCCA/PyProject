@@ -13,12 +13,7 @@ class CommandGenerator:
 
     def generate_init_command(self, project_config) -> str:
         """Generate the project initialization command."""
-        # (project_config["project_path"],)
-        # (project_config["project_name"],)
-        # (,)
         return f"{self.uv_executable} init --python {project_config['python_version']} --name {project_config['project_name']}   {project_config['vcs_option']}  {project_config['no_readme']} {project_config['no_workspace']} {project_config['project_path']}"
-
-        # return f"{self.uv_executable} init --python {python_version} --name {project_name} {project_path}"
 
     def generate_add_command(self, package: Package, project_path: Path) -> str:
         """Generate a package addition command."""
@@ -42,10 +37,6 @@ class CommandGenerator:
 
         # Add init command
         init_cmd = self.generate_init_command(project_config)
-        # project_config["project_path"],
-        # project_config["project_name"],
-        # project_config["python_version"],
-        #        )
         commands.append(init_cmd)
 
         # Add package commands
