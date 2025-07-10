@@ -22,13 +22,12 @@ from PySide6.QtWidgets import (
 
 from AppConfig import AppConfig
 from CommandGenerator import CommandGenerator
-from Package import Package
+from Package import Package, PackageStatus
 from ProjectManager import ProjectManager
 from ProjectTemplate import ProjectTemplate
-
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from PySide6.QtGui import QIcon
+from Logger import logger
+import resources_rc  # noqa: F401 qt resource
 
 
 class MainWindow(QMainWindow):
@@ -37,8 +36,9 @@ class MainWindow(QMainWindow):
     def __init__(self, config: Optional[AppConfig] = None) -> None:
         """Initialize the MainWindow with UI setup and configuration loading."""
         super().__init__()
-        self.config = config or AppConfig()
+        # logger.error(QDir(":/").entryList(["*"], QDir.Files | QDir.NoSymLinks, QDir.Name))
         self.logger = logging.getLogger(__name__)
+        self.config = config or AppConfig()
 
         # Initialize state
         self._project_location: Optional[str] = None
@@ -126,31 +126,60 @@ class MainWindow(QMainWindow):
             if self.config.default_python_version in text:
                 self.which_python.setCurrentIndex(idx)
 
+    # def load_json_config(self, json_path: str) -> None:
+    #     """
+    #     Load project template configurations from a JSON file and setup UI.
+    #     """
+    #     try:
+    #         with open(json_path, "r", encoding="utf-8") as f:
+    #             raw_data = json.load(f)
+
+    #         self.template_data = self._parse_template_data(raw_data)
+    #         self._populate_template_combo()
+    #         self._setup_current_template(0)
+    #         self._set_buttons_enabled(False)
+
+    #     except FileNotFoundError:
+    #         self.logger.error(f"Configuration file not found: {json_path}")
+    #         raise
+    #     except json.JSONDecodeError as e:
+    #         self.logger.error(f"Invalid JSON in configuration file: {e}")
+    #         raise
     def load_json_config(self, json_path: str) -> None:
         """
-        Load project template configurations from a JSON file and setup UI.
+        Load project template configurations from a JSON file (including Qt Resource) and setup UI.
         """
-        try:
-            with open(json_path, "r", encoding="utf-8") as f:
-                raw_data = json.load(f)
+        from PySide6.QtCore import QFile, QIODevice, QTextStream
+        import json
 
+        try:
+            file = QFile(json_path)
+            if not file.open(QIODevice.ReadOnly | QIODevice.Text):
+                raise IOError(f"Could not open {json_path}")
+
+            stream = QTextStream(file)
+            data = stream.readAll()
+            file.close()
+
+            raw_data = json.loads(data)
             self.template_data = self._parse_template_data(raw_data)
             self._populate_template_combo()
             self._setup_current_template(0)
             self._set_buttons_enabled(False)
+        except Exception as e:
+            # Handle error (log, show message, etc.)
+            print(f"Failed to load config: {e}")
 
-        except FileNotFoundError:
-            self.logger.error(f"Configuration file not found: {json_path}")
-            raise
-        except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid JSON in configuration file: {e}")
-            raise
-
-    def _parse_template_data(self, raw_data: Dict[str, Any]) -> Dict[str, ProjectTemplate]:
+    def _parse_template_data(
+        self, raw_data: Dict[str, Any]
+    ) -> Dict[str, ProjectTemplate]:
         """Parse raw JSON data into ProjectTemplate objects."""
         templates = {}
         for name, data in raw_data.items():
-            packages = [Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None) for pkg in data.get("packages", [])]
+            packages = [
+                Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None)
+                for pkg in data.get("packages", [])
+            ]
             templates[name] = ProjectTemplate(
                 name=name,
                 packages=packages,
@@ -196,7 +225,9 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             return not progress.wasCanceled()
 
-        success = self.project_manager.create_project(project_config, enabled_packages, progress_callback)
+        success = self.project_manager.create_project(
+            project_config, enabled_packages, progress_callback
+        )
 
         progress.close()
 
@@ -224,7 +255,11 @@ class MainWindow(QMainWindow):
     def _get_enabled_packages(self) -> List[Package]:
         """Get all enabled packages from the UI checkboxes."""
         return [
-            Package(name=cb.objectName(), status=PackageStatus.ENABLED.value, version=cb.property("version"))
+            Package(
+                name=cb.objectName(),
+                status=PackageStatus.ENABLED.value,
+                version=cb.property("version"),
+            )
             for cb in self._get_package_checkboxes()
             if cb.isChecked()
         ]
@@ -236,7 +271,9 @@ class MainWindow(QMainWindow):
 
         layout = self.options_gb.layout()
         return [
-            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
+            layout.itemAt(i).widget()
+            for i in range(layout.count())
+            if isinstance(layout.itemAt(i).widget(), QCheckBox)
         ]
 
     def _make_main_runnable(self, project_path: Path) -> None:
@@ -264,7 +301,9 @@ class MainWindow(QMainWindow):
 
         enabled_packages = self._get_enabled_packages()
         project_config = self._get_project_config()
-        commands = self.command_generator.generate_all_commands(project_config, enabled_packages)
+        commands = self.command_generator.generate_all_commands(
+            project_config, enabled_packages
+        )
 
         self.uv_output.append("Dry run - Commands that would be executed:\n")
         for cmd in commands:
@@ -278,7 +317,9 @@ class MainWindow(QMainWindow):
             return
 
         python_version = self._get_selected_python_version()
-        cmd = f"{self.uv_executable} init --script --python {python_version} {file_path}"
+        cmd = (
+            f"{self.uv_executable} init --script --python {python_version} {file_path}"
+        )
 
         try:
             subprocess.run(cmd, shell=True, check=True)
@@ -289,13 +330,17 @@ class MainWindow(QMainWindow):
 
     def _get_script_file_path(self) -> Optional[Path]:
         """Get the file path for script creation using dialog."""
-        file_name = QFileDialog.getSaveFileName(self, "Save Python Script", "", "Python Files (*.py)")[0]
+        file_name = QFileDialog.getSaveFileName(
+            self, "Save Python Script", "", "Python Files (*.py)"
+        )[0]
         return Path(file_name) if file_name else None
 
     def _select_location(self) -> None:
         """Open a file dialog to select the project location."""
         options = QFileDialog.Options()
-        directory = QFileDialog.getExistingDirectory(self, "Select Project Location", "", options=options)
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Project Location", "", options=options
+        )
         if directory:
             self.project_location.setText(directory)
             self.project_location = directory
@@ -369,7 +414,9 @@ class MainWindow(QMainWindow):
                 col = (i // 3) % self.config.default_columns
                 layout.addWidget(checkbox, row, col)
 
-    def _generate_pyproject_extras(self, pyproject_extras: Optional[List[str]], layout) -> None:
+    def _generate_pyproject_extras(
+        self, pyproject_extras: Optional[List[str]], layout
+    ) -> None:
         """Generate text edit for pyproject.toml extras."""
         if not pyproject_extras:
             return
@@ -416,6 +463,8 @@ class MainWindow(QMainWindow):
 def main():
     """Main application entry point."""
     app = QApplication(sys.argv)
+    # this needs to be loaded locally for menu bars etc as resources are not read by the system icon setup
+    app.setWindowIcon(QIcon("pyproject.png"))
 
     try:
         config = AppConfig()

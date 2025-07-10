@@ -10,7 +10,9 @@ class CommandGenerator:
     def __init__(self, uv_executable: str):
         self.uv_executable = uv_executable
 
-    def generate_init_command(self, project_path: Path, project_name: str, python_version: str) -> str:
+    def generate_init_command(
+        self, project_path: Path, project_name: str, python_version: str
+    ) -> str:
         """Generate the project initialization command."""
         return f"{self.uv_executable} init --python {python_version} --name {project_name} {project_path}"
 
@@ -20,13 +22,17 @@ class CommandGenerator:
             return f"{self.uv_executable} add '{package.version_spec}' --project {project_path}"
         return f"{self.uv_executable} add {package.name} --project {project_path}"
 
-    def generate_all_commands(self, project_config: Dict[str, Any], enabled_packages: List[Package]) -> List[str]:
+    def generate_all_commands(
+        self, project_config: Dict[str, Any], enabled_packages: List[Package]
+    ) -> List[str]:
         """Generate all commands needed to create the project."""
         commands = []
 
         # Add init command
         init_cmd = self.generate_init_command(
-            project_config["project_path"], project_config["project_name"], project_config["python_version"]
+            project_config["project_path"],
+            project_config["project_name"],
+            project_config["python_version"],
         )
         commands.append(init_cmd)
 
