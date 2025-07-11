@@ -151,16 +151,11 @@ class MainWindow(QMainWindow):
             # Handle error (log, show message, etc.)
             print(f"Failed to load config: {e}")
 
-    def _parse_template_data(
-        self, raw_data: Dict[str, Any]
-    ) -> Dict[str, ProjectTemplate]:
+    def _parse_template_data(self, raw_data: Dict[str, Any]) -> Dict[str, ProjectTemplate]:
         """Parse raw JSON data into ProjectTemplate objects."""
         templates = {}
         for name, data in raw_data.items():
-            packages = [
-                Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None)
-                for pkg in data.get("packages", [])
-            ]
+            packages = [Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None) for pkg in data.get("packages", [])]
             extras = data.get("extras", {})
             pyproject_extras = extras.get("pyproject_extras") if extras else None
             templates[name] = ProjectTemplate(
@@ -208,9 +203,7 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()
             return not progress.wasCanceled()
 
-        success = self.project_manager.create_project(
-            project_config, enabled_packages, extra_files, progress_callback
-        )
+        success = self.project_manager.create_project(project_config, enabled_packages, extra_files, progress_callback)
         # now add the pyproject_extras if they exist in the project_config to the end of the pyproject.toml file
         print("Adding Extras To PyProject.toml")
         if self.findChild(QPlainTextEdit, "TomlText"):
@@ -232,6 +225,7 @@ class MainWindow(QMainWindow):
         """Get the current project configuration."""
         project_path = Path(self.project_location_prop) / self.project_name.text()
         python_version = self._get_selected_python_version()
+        generator = ["--app", "--package", "--lib"]
 
         return {
             "project_path": project_path,
@@ -240,6 +234,7 @@ class MainWindow(QMainWindow):
             "vcs_option": "--vcs git" if self.use_git.isChecked() else "--vcs none",
             "no_readme": "--no-readme" if self.no_readme.isChecked() else "",
             "no_workspace": "--no-workspace" if self.no_workspace.isChecked() else "",
+            "gen_type": generator[self.app_type.currentIndex()],
         }
 
     def _get_selected_python_version(self) -> str:
@@ -266,9 +261,7 @@ class MainWindow(QMainWindow):
                 srcs = cb.property("src") or []
                 dsts = cb.property("dst") or []
                 # Optionally handle executable as a list, or default to False
-                executables = cb.property("executable") or [False] * max(
-                    len(srcs), len(dsts)
-                )
+                executables = cb.property("executable") or [False] * max(len(srcs), len(dsts))
                 # Ensure all are lists of the same length
                 for src, dst, executable in zip(srcs, dsts, executables):
                     enabled_extras.append(
@@ -284,9 +277,7 @@ class MainWindow(QMainWindow):
 
         layout = self.options_gb.layout()
         return [
-            layout.itemAt(i).widget()
-            for i in range(layout.count())
-            if isinstance(layout.itemAt(i).widget(), QCheckBox)
+            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
         ]
 
     def _get_extras(self) -> List[QCheckBox]:
@@ -296,9 +287,7 @@ class MainWindow(QMainWindow):
 
         layout = self.extras_gb.layout()
         return [
-            layout.itemAt(i).widget()
-            for i in range(layout.count())
-            if isinstance(layout.itemAt(i).widget(), QCheckBox)
+            layout.itemAt(i).widget() for i in range(layout.count()) if isinstance(layout.itemAt(i).widget(), QCheckBox)
         ]
 
     def _make_main_runnable(self, project_path: Path) -> None:
@@ -322,9 +311,7 @@ class MainWindow(QMainWindow):
         enabled_packages = self._get_enabled_packages()
         project_config = self._get_project_config()
         extra_files = self._get_enabled_extras()
-        commands = self.command_generator.generate_all_commands(
-            project_config, enabled_packages, extra_files
-        )
+        commands = self.command_generator.generate_all_commands(project_config, enabled_packages, extra_files)
 
         self.uv_output.append("Dry run - Commands that would be executed:\n")
         for cmd in commands:
@@ -338,9 +325,7 @@ class MainWindow(QMainWindow):
             return
 
         python_version = self._get_selected_python_version()
-        cmd = (
-            f"{self.uv_executable} init --script --python {python_version} {file_path}"
-        )
+        cmd = f"{self.uv_executable} init --script --python {python_version} {file_path}"
 
         try:
             subprocess.run(cmd, shell=True, check=True)
@@ -350,23 +335,17 @@ class MainWindow(QMainWindow):
             self.logger.error(f"Error creating script: {e}")
 
         if self.make_runnable.isChecked() and self.app_type.currentIndex() == 0:
-            self._make_runnable(
-                self.project_location_prop + "/" + self.project_name.text() + "/main.py"
-            )
+            self._make_runnable(self.project_location_prop + "/" + self.project_name.text() + "/main.py")
 
     def _get_script_file_path(self) -> Optional[Path]:
         """Get the file path for script creation using dialog."""
-        file_name = QFileDialog.getSaveFileName(
-            self, "Save Python Script", "", "Python Files (*.py)"
-        )[0]
+        file_name = QFileDialog.getSaveFileName(self, "Save Python Script", "", "Python Files (*.py)")[0]
         return Path(file_name) if file_name else None
 
     def _select_location(self) -> None:
         """Open a file dialog to select the project location."""
         options = QFileDialog.Options()
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Project Location", "", options=options
-        )
+        directory = QFileDialog.getExistingDirectory(self, "Select Project Location", "", options=options)
         if directory:
             self.project_location.setText(directory)
             self.project_location_prop = directory
@@ -443,9 +422,7 @@ class MainWindow(QMainWindow):
             col = idx % self.config.default_columns
             layout.addWidget(checkbox, row, col)
 
-    def _generate_pyproject_extras(
-        self, pyproject_extras: Optional[List[str]], layout
-    ) -> None:
+    def _generate_pyproject_extras(self, pyproject_extras: Optional[List[str]], layout) -> None:
         """Generate text edit for pyproject.toml extras."""
         if not pyproject_extras:
             return
