@@ -152,12 +152,49 @@ class MainWindow(QMainWindow):
             print(f"Failed to load config: {e}")
 
     def _parse_template_data(self, raw_data: Dict[str, Any]) -> Dict[str, ProjectTemplate]:
-        """Parse raw JSON data into ProjectTemplate objects."""
-        templates = {}
+        """
+        Parse raw JSON data into ProjectTemplate objects.
+
+        Takes the raw JSON configuration data and converts it into a dictionary of
+        ProjectTemplate objects, where each template contains parsed package information,
+        descriptions, and extra configuration options.
+
+        Args:
+            raw_data: A dictionary containing the raw JSON template data.
+                     Expected structure:
+                     {
+                         "template_name": {
+                             "packages": [["name", "status", "version?"], ...],
+                             "description": ["desc1", "desc2", ...],
+                             "extras": {
+                                 "templates": [...],
+                                 "pyproject_extras": [...]
+                             }
+                         }
+                     }
+
+        Returns:
+            A dictionary mapping template names to ProjectTemplate objects.
+            Key: template name (str)
+            Value: ProjectTemplate object with parsed data
+
+        Raises:
+            KeyError: If required keys are missing from the raw data
+            IndexError: If package data doesn't have the expected structure
+        """
+        templates: Dict[str, ProjectTemplate] = {}
+
         for name, data in raw_data.items():
-            packages = [Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None) for pkg in data.get("packages", [])]
-            extras = data.get("extras", {})
-            pyproject_extras = extras.get("pyproject_extras") if extras else None
+            # Parse packages from list format [name, status, version?]
+            package_data: List[List[str]] = data.get("packages", [])
+            packages: List[Package] = [
+                Package(pkg[0], pkg[1], pkg[2] if len(pkg) > 2 else None) for pkg in package_data
+            ]
+
+            # Extract extras and pyproject_extras (nested inside extras)
+            extras: Dict[str, Any] = data.get("extras", {})
+            pyproject_extras: Optional[List[str]] = extras.get("pyproject_extras") if extras else None
+
             templates[name] = ProjectTemplate(
                 name=name,
                 packages=packages,
@@ -165,6 +202,7 @@ class MainWindow(QMainWindow):
                 extras=extras,
                 pyproject_extras=pyproject_extras,
             )
+
         return templates
 
     def _populate_template_combo(self) -> None:
@@ -186,7 +224,7 @@ class MainWindow(QMainWindow):
         if not self.is_project_active:
             self.logger.warning("No project location selected.")
             return
-
+        self.uv_output.clear()
         enabled_packages = self._get_enabled_packages()
         project_config = self._get_project_config()
         extra_files = self._get_enabled_extras()
@@ -307,7 +345,7 @@ class MainWindow(QMainWindow):
         if not self.is_project_active:
             self.logger.warning("No project location selected.")
             return
-
+        self.uv_output.clear()
         enabled_packages = self._get_enabled_packages()
         project_config = self._get_project_config()
         extra_files = self._get_enabled_extras()

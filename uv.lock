@@ -4,8 +4,7 @@ requires-python = ">=3.13.2"
 
 [manifest]
 members = [
-    "lib",
-    "package",
+    "myproject",
     "pyproject",
 ]
 
@@ -19,17 +18,6 @@ wheels = [
 ]
 
 [[package]]
-name = "lib"
-version = "0.1.0"
-source = { editable = "Lib" }
-dependencies = [
-    { name = "nccapy" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "nccapy", specifier = ">=0.1.7" }]
-
-[[package]]
 name = "macholib"
 version = "1.16.3"
 source = { registry = "https://pypi.org/simple" }
@@ -40,6 +28,17 @@ sdist = { url = "https://files.pythonhosted.org/packages/95/ee/af1a3842bdd5902ce
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d1/5d/c059c180c84f7962db0aeae7c3b9303ed1d73d76f2bfbc32bc231c8be314/macholib-1.16.3-py2.py3-none-any.whl", hash = "sha256:0e315d7583d38b8c77e815b1ecbdbf504a8258d8b3e17b61165c6feb60d18f2c", size = 38094, upload-time = "2023-09-25T09:10:14.188Z" },
 ]
+
+[[package]]
+name = "myproject"
+version = "0.1.0"
+source = { virtual = "MyProject" }
+dependencies = [
+    { name = "nccapy" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "nccapy", specifier = ">=0.1.7" }]
 
 [[package]]
 name = "nccapy"
@@ -84,17 +83,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/f1/7e/7f431d8bd8eb7e03d79294aed238b1b0b174b3148570d03a8a8a8f6a0da9/numpy-2.3.1-cp313-cp313t-win_amd64.whl", hash = "sha256:2a809637460e88a113e186e87f228d74ae2852a2e0c44de275263376f17b5bdc", size = 12870697, upload-time = "2025-06-21T12:24:40.644Z" },
     { url = "https://files.pythonhosted.org/packages/d4/ca/af82bf0fad4c3e573c6930ed743b5308492ff19917c7caaf2f9b6f9e2e98/numpy-2.3.1-cp313-cp313t-win_arm64.whl", hash = "sha256:eccb9a159db9aed60800187bc47a6d3451553f0e1b08b068d8b277ddfbb9b244", size = 10260376, upload-time = "2025-06-21T12:24:56.884Z" },
 ]
-
-[[package]]
-name = "package"
-version = "0.1.0"
-source = { editable = "Package" }
-dependencies = [
-    { name = "nccapy" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "nccapy", specifier = ">=0.1.7" }]
 
 [[package]]
 name = "packaging"
