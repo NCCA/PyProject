@@ -20,7 +20,9 @@
     "packages": [
       ["matplotlib", "enabled", ">=3.10.1"],
       ["numpy", "enabled", ">=2.2.3"],
-      ["pandas", "enabled", ">=2.2.3"],
+      ["qtconsole", "enabled"],
+      ["pyqt5", "enabled"],
+      ["pandas", "false", ">=2.2.3"],
       ["polars", "enabled", ">=1.24.0"],
       ["torch", "enabled", ">=2.6.0"],
       ["torchvision", "enabled", ">=0.21.0"],
@@ -28,7 +30,7 @@
     ],
     "description": [
       "This is a sample machine learning project configuration file",
-      "It will install numpy, pandas,polars PyTorch, and matplotlib packages",
+      "It will install numpy, polars (default) pandas(optional), PyTorch, and matplotlib packages",
       "This is the ideal starting place for SE For Media Projects"
     ],
     "extras": {
@@ -75,6 +77,29 @@
           "src": ["pyside_starter.py", "form.ui"],
           "dst": ["main.py", "form.ui"],
           "description": "Create a simple MainWindowApp"
+        }
+      ]
+    }
+  },
+  "Marimo project": {
+    "packages": [
+      ["marimo", "enabled"],
+      ["numpy", "enabled"]
+    ],
+    "description": [
+      "A simple marimo project, use marimo [filename] to open files"
+    ],
+    "extras": {
+      "templates": [
+        {
+          "src": ["marimo_direnv"],
+          "dst": [".envrc"],
+          "description": "auto activate the virtual env on cd"
+        },
+        {
+          "src": ["marimo"],
+          "dst": ["marimo_functions.sh"],
+          "description": "marimo zsh functions"
         }
       ]
     }

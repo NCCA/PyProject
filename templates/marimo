@@ -1,0 +1,4 @@
+echo "Loading zsh functions..."
+marimo(){
+    uv run marimo edit "$@"
+}
