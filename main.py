@@ -194,13 +194,16 @@ class MainWindow(QMainWindow):
             # Extract extras and pyproject_extras (nested inside extras)
             extras: Dict[str, Any] = data.get("extras", {})
             pyproject_extras: Optional[List[str]] = extras.get("pyproject_extras") if extras else None
-
+            no_main = ""
+            if extras.get("no_main"):
+                no_main = "--bare"
             templates[name] = ProjectTemplate(
                 name=name,
                 packages=packages,
                 description=data.get("description", []),
                 extras=extras,
                 pyproject_extras=pyproject_extras,
+                no_main=no_main,
             )
 
         return templates
@@ -264,7 +267,9 @@ class MainWindow(QMainWindow):
         project_path = Path(self.project_location_prop) / self.project_name.text()
         python_version = self._get_selected_python_version()
         generator = ["--app", "--package", "--lib"]
-
+        template_name = self.template_choice.currentText()
+        template = self.template_data.get(template_name)
+        no_main = template.no_main
         return {
             "project_path": project_path,
             "project_name": self.project_name.text(),
@@ -273,6 +278,7 @@ class MainWindow(QMainWindow):
             "no_readme": "--no-readme" if self.no_readme.isChecked() else "",
             "no_workspace": "--no-workspace" if self.no_workspace.isChecked() else "",
             "gen_type": generator[self.app_type.currentIndex()],
+            "no_main": no_main,
         }
 
     def _get_selected_python_version(self) -> str:

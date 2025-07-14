@@ -16,6 +16,26 @@
       ]
     }
   },
+  "Simple Jupyter": {
+    "packages": [],
+    "description": ["A blank jupyter project where you can add your own deps"],
+    "extras": {
+      "templates": [
+        {
+          "src": ["ml_direnv"],
+          "dst": [".envrc"],
+          "description": "auto activate the virtual env on cd"
+        },
+        {
+          "src": ["jupyter_functions"],
+          "dst": ["jupyter_functions.sh"],
+          "description": "add jupyter commands"
+        }
+      ],
+      "pyproject_extras": ["dev = [", "'ipykernel',", "]"],
+      "no_main": true
+    }
+  },
   "ML Project": {
     "packages": [
       ["matplotlib", "enabled", ">=3.10.1"],

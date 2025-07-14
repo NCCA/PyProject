@@ -13,3 +13,4 @@ class ProjectTemplate:
     description: List[str]
     extras: Dict[str, Any]
     pyproject_extras: Optional[List[str]] = None
+    no_main: str = ""

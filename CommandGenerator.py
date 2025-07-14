@@ -13,10 +13,12 @@ class CommandGenerator:
 
     def generate_init_command(self, project_config) -> str:
         """Generate the project initialization command."""
+        print(f"generating commands {project_config['no_main']}")
         return (
             f"{self.uv_executable} init {project_config['gen_type']} "
             f"--python {project_config['python_version']} "
             f"--name {project_config['project_name']} "
+            f"{project_config['no_main']} "
             f"{project_config['vcs_option']} "
             f"{project_config['no_readme']} "
             f"{project_config['no_workspace']} "
